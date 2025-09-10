@@ -1,0 +1,34 @@
+port: 5461
+deploy_algorithms_from: "./algorithms"
+
+info:
+  product_name: "TESCAN 3D Backend"
+  group_name: "TESCAN GROUP, a.s."
+  organization_name: "TESCAN 3DIM, s.r.o."
+  organization_domain: "tescan3dim.com"
+  version: "0.1"
+
+gui:
+  algorithm_add_remove_in_menus: true
+  use_systray: false
+  icon_path: "resources/t3dbackend.ico"
+
+storage:
+  data_store_expire_days: 1
+  backend_settings:
+    provider: "minio"
+    start_instance: true
+    port: 9091
+    console_port: 9090
+    executable_path: "minio/TESCAN3DBackendDB.exe"
+    storage_path: "minio/t3d_server_store"
+
+inference:
+  device: "cuda"
+  cuda_visible_devices: "0"
+  backend_settings:
+    executor: "fastapi_background_tasks"
+    worker_number: 1
+
+ssl:
+  use_ssl: false

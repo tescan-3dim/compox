@@ -1,0 +1,268 @@
+"""
+Copyright 2024 TESCAN 3DIM, s.r.o.
+All rights reserved
+"""
+
+import os
+import sys
+from typing import Literal, Union, Annotated
+import json
+
+import yaml
+from pydantic import BaseModel, Field, ConfigDict, model_validator
+from pydantic_settings import BaseSettings
+
+from t3d_server.server_utils import generate_uuid
+
+
+# dont parse CLI arguments if running in pytest
+# or if T3D_SERVER_DISABLE_CLI is set to True
+_PARSE_CLI = not os.environ.get("T3D_SERVER_DISABLE_CLI", False) and "pytest" not in sys.modules
+
+
+# configuration sections
+class T3DServerInfo(BaseModel):
+    """
+    Pydantic model for T3D Server information.
+    The model is configured to forbid extra fields that are not defined in the model.
+    """
+    model_config = ConfigDict(extra='forbid')
+    product_name: str = "TESCAN 3D Backend"
+    server_tags: list[str] = []
+    group_name: str = "TESCAN GROUP, a.s."
+    organization_name: str = "TESCAN 3DIM, s.r.o."
+    organization_domain: str = "tescan3dim.com"
+    version: str = "0.1"
+    @model_validator(mode="after")
+    def add_default_tag(self):
+        if "t3d_server" not in self.server_tags:
+            self.server_tags.append("t3d_server")
+        return self
+    
+    
+class GUISettings(BaseModel):
+    """
+    Pydantic model for GUI settings.
+    The model is configured to forbid extra fields that are not defined in the model.
+    """
+    model_config = ConfigDict(extra='forbid')
+    algorithm_add_remove_in_menus: bool = False
+    use_systray: bool = False
+    icon_path: str = "../t3d_server/resources/t3dbackend.ico"
+
+
+class MinioSettings(BaseModel):
+    """
+    Pydantic model for MinIO settings. s3_endpoint_url can be unset, in which case 
+    it will be set to http://localhost:{port} after the model is validated. Either
+    this or the AWS scheme is used depending on the provider field in backend_settings.
+    The model is configured to forbid extra fields that are not defined in the model.
+    """
+    model_config = ConfigDict(extra='forbid')
+    provider: Literal["minio"] = "minio"
+    start_instance: bool = True
+    port: int = 9091
+    console_port: int = 9090
+    executable_path: str = os.path.join("minio", "minio_bin")
+    storage_path: str = os.path.join("minio", "t3d_server_store")
+    # derived attributes
+    aws_region: str | None = None
+    s3_domain_name: str | None = None
+    s3_endpoint_url: str | None = None
+    @model_validator(mode="after")
+    def set_endpoint_url_from_port(self):
+        if self.s3_endpoint_url is None:
+            self.s3_endpoint_url: str = f"http://localhost:{self.port}"
+        return self
+    
+
+
+class AWSSettings(BaseModel):
+    """
+    Pydantic model for AWS settings. Either this or the MinIO scheme is used 
+    depending on the provider field in backend_settings. The model is configured to 
+    forbid extra fields that are not defined in the model.
+    """
+    model_config = ConfigDict(extra='forbid')
+    provider: Literal["aws"] = "aws"
+    s3_endpoint_url: str | None = None
+    aws_region: str | None = None
+    s3_domain_name: str | None = None
+    
+
+class StorageSettings(BaseModel):
+    """
+    Pydantic model for storage settings.
+    The model is configured to forbid extra fields that are not defined in the model.
+    """
+    model_config = ConfigDict(extra='forbid')
+    collection_prefix: str = ""
+    data_store_expire_days: int = 1
+    access_key_id: str | None = generate_uuid(version=4)
+    secret_access_key: str | None  = generate_uuid(version=4)
+    backend_settings: Annotated[
+        Union[
+            MinioSettings, 
+            AWSSettings
+            ], 
+        Field(discriminator='provider')
+        ] = MinioSettings()
+
+
+class FastAPITaskSettings(BaseModel):
+    """
+    Pydantic model for FastAPI task settings. Either this or the Celery scheme is used
+    depending on the executor field in backend_settings. The model is configured to 
+    forbid extra fields that are not defined in the model.
+    """
+    model_config = ConfigDict(extra='forbid')
+    executor: Literal["fastapi_background_tasks"] = "fastapi_background_tasks"
+    worker_number: int = 1
+    
+
+class CelerySettings(BaseModel):
+    """
+    Pydantic model for Celery task settings. Either this or the FastAPI scheme is used
+    depending on the executor field in backend_settings. The model is configured to 
+    forbid extra fields that are not defined in the model.
+    """
+    model_config = ConfigDict(extra='forbid')
+    executor: Literal["celery"] = "celery"
+    worker_name: str = "t3d_worker"
+    broker_url: str
+    result_backend: str = "rpc://"
+    run_flower: bool = False
+    flower_port: int | None = None
+    
+    
+class InferenceSettings(BaseModel):
+    """
+    Pydantic model for inference settings.
+    The model is configured to forbid extra fields that are not defined in the model.
+    """
+    model_config = ConfigDict(extra='forbid')
+    device: Literal["cuda", "cpu", "mps"] = "cuda"
+    cuda_visible_devices: str = "0"
+    backend_settings: Annotated[
+        Union[
+            FastAPITaskSettings,
+            CelerySettings
+            ],
+        Field(discriminator='executor')
+        ] = FastAPITaskSettings()
+    
+    
+class SSLSettings(BaseModel):
+    """
+    Pydantic model for SSL settings. If use_ssl is set to True,
+    ssl_keyfile and ssl_certfile paths will be generated automatically unless provided.
+    The model is configured to forbid extra fields that are not defined in the model.
+    """
+    model_config = ConfigDict(extra='forbid')
+    use_ssl: bool = False
+    ssl_keyfile: str | None = None
+    ssl_certfile: str | None = None
+    
+    
+class MiddlewareSettings(BaseModel):
+    """
+    Pydantic model for Middleware settings.
+    The model is configured to forbid extra fields that are not defined in the model.
+    """
+    model_config = ConfigDict(extra='forbid')
+    allow_origins: list = []
+    allow_methods: list = ["GET"]
+    allow_headers: list = []
+    allow_credentials: bool = False
+    expose_headers: list = []
+    max_age: int = 3600
+
+
+class Settings(BaseSettings, cli_parse_args=_PARSE_CLI):
+    """
+    Pydantic model for T3D Server settings.
+    The model is configured to forbid extra fields that are not defined in the model.
+    """
+    
+    model_config = ConfigDict(extra='forbid', env_nested_delimiter='__', env_prefix="T3D_")
+    
+    port: int = 5461
+    deploy_algorithms_from: str = "./algorithms"  # points to default foo/bar algorithms
+    
+    info: T3DServerInfo = T3DServerInfo()
+    gui: GUISettings = GUISettings()
+    storage: StorageSettings = StorageSettings()
+    inference: InferenceSettings = InferenceSettings()
+    ssl: SSLSettings = SSLSettings()
+    middleware: MiddlewareSettings = MiddlewareSettings()
+    
+    log_path: str = "LOG_DEFAULT:t3d_server.log"
+    
+    # to allow parsing other arguments by runtime scripts
+    config: str | None = None
+    
+    @model_validator(mode="after")
+    def parse_paths(self):
+        """
+        Inject paths to the settings based on the OS and server info.
+        """
+        if os.name == "posix":  # linux standalone
+            _LOG_DEFAULT_PREFIX: str = os.path.join(
+                "var", 
+                "log",
+                self.info.organization_name,
+                self.info.product_name
+            )
+            _PROGRAMDATA_DEFAULT_PREFIX: str = "."
+            _RELATIVE_DEFAULT_PREFIX: str = sys._MEIPASS if hasattr(sys, "_MEIPASS") else "."
+        elif os.name == "nt":  # windows
+            _LOG_DEFAULT_PREFIX: str = os.path.join(
+                os.getenv("TEMP"),
+                self.info.organization_name,
+                self.info.product_name
+            )
+            _PROGRAMDATA_DEFAULT_PREFIX: str = os.path.join(
+                os.getenv("PROGRAMDATA"),
+                self.info.organization_name,
+                self.info.product_name
+            )
+            _RELATIVE_DEFAULT_PREFIX: str = sys._MEIPASS if hasattr(sys, "_MEIPASS") else "."
+        else:
+            raise ValueError(f"Unsupported OS: {os.name}")
+        
+        def prepend_path(path: str | None) -> str | None:
+            if path is None:
+                return path
+            if path.startswith("LOG_DEFAULT:"):
+                return os.path.join(_LOG_DEFAULT_PREFIX, os.path.normpath(path.split("LOG_DEFAULT:")[1]))
+            elif path.startswith("PROGRAMDATA_DEFAULT:"):
+                return os.path.join(_PROGRAMDATA_DEFAULT_PREFIX, os.path.normpath(path.split("PROGRAMDATA_DEFAULT:")[1]))
+            elif path.startswith("RELATIVE_DEFAULT:"):
+                return os.path.join(_RELATIVE_DEFAULT_PREFIX, os.path.normpath(path.split("RELATIVE_DEFAULT:")[1]))
+            return path
+        
+        self.log_path = prepend_path(self.log_path)
+        self.ssl.ssl_keyfile = prepend_path(self.ssl.ssl_keyfile)
+        self.ssl.ssl_certfile = prepend_path(self.ssl.ssl_certfile)
+        self.gui.icon_path = prepend_path(self.gui.icon_path)
+        if self.storage.backend_settings.provider == "minio":
+            self.storage.backend_settings.executable_path = prepend_path(self.storage.backend_settings.executable_path)
+            self.storage.backend_settings.storage_path = prepend_path(self.storage.backend_settings.storage_path)
+        
+        return self
+    
+
+def get_server_settings(config_path: str | None = None, verbose: bool = True) -> Settings:
+    """
+    Get server settings from a yaml file or use default settings.
+    """
+    if config_path is not None:
+        with open(config_path, "r") as file:
+            conf = yaml.safe_load(file)
+            settings = Settings(**conf)
+    else:
+        settings = Settings()
+    if verbose:
+       print(json.dumps(json.loads(settings.model_dump_json()), indent=4))
+    return settings
+
