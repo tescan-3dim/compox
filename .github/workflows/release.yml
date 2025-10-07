@@ -3,7 +3,7 @@ name: Build & publish (TestPyPI)
 on:
   push:
     tags:
-      - 't3d_server-v*'
+      - 'compox-v*'
 
 permissions:
   contents: read
@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: testpypi
-      url: https://test.pypi.org/project/t3d_server/
+      url: https://test.pypi.org/project/compox/
     permissions:
       id-token: write
       contents: read

@@ -1,4 +1,4 @@
-name: T3D Server tests
+name: Compox tests
 
 on: workflow_dispatch
 
@@ -22,4 +22,4 @@ jobs:
 
       - name: Run pytest
         run: |
-          pytest --cov=src --cov-report=term-missing tests --t3d_server_config_path=tests/test_server.yaml
+          pytest --cov=src --cov-report=term-missing tests --compox_config_path=tests/test_server.yaml

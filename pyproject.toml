@@ -3,8 +3,8 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "t3d-server"
-version = "1.0.18dev1"
+name = "compox"
+version = "1.0.18"
 description = ""
 authors = [
 {name = "Jan Matula", email = "jan.matula@tescan.com"},
@@ -58,4 +58,4 @@ docs = [
 ]
 
 [project.scripts]
-t3d-server = "t3d_server.cli:app"
+compox = "compox.cli:app"

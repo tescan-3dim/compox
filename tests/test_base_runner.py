@@ -6,7 +6,7 @@ All rights reserved
 import pytest
 from unittest.mock import MagicMock
 
-from t3d_server.algorithm_utils.BaseRunner import BaseRunner
+from compox.algorithm_utils.BaseRunner import BaseRunner
 
 
 def fake_preprocess(input_data, args):

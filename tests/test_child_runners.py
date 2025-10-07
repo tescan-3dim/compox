@@ -7,20 +7,20 @@ import pytest
 import numpy as np
 from unittest.mock import MagicMock
 
-from t3d_server.algorithm_utils.Image2AlignmentRunner import (
+from compox.algorithm_utils.Image2AlignmentRunner import (
     Image2AlignmentRunner,
 )
-from t3d_server.algorithm_utils.Image2EmbeddingRunner import (
+from compox.algorithm_utils.Image2EmbeddingRunner import (
     Image2EmbeddingRunner,
 )
-from t3d_server.algorithm_utils.Image2ImageRunner import Image2ImageRunner
-from t3d_server.algorithm_utils.Image2SegmentationRunner import (
+from compox.algorithm_utils.Image2ImageRunner import Image2ImageRunner
+from compox.algorithm_utils.Image2SegmentationRunner import (
     Image2SegmentationRunner,
 )
-from t3d_server.algorithm_utils.Segmentation2SegmentationRunner import (
+from compox.algorithm_utils.Segmentation2SegmentationRunner import (
     Segmentation2SegmentationRunner,
 )
-from t3d_server.tasks.context_task_handler import current_task_handler
+from compox.tasks.context_task_handler import current_task_handler
 
 
 PREPROCESS_CONFIG = [

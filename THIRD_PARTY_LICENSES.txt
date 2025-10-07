@@ -12,7 +12,7 @@ terms of the software components used.
                              PROJECT INFORMATION
 --------------------------------------------------------------------------------
 
-Project Name:        t3d-server
+Project Name:        compox
 Version:             0.0.1
 Author:              TESCAN 3DIM, s.r.o.
 Date Generated:      2024-06-20

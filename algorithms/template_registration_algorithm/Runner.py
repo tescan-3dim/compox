@@ -5,7 +5,7 @@ All rights reserved
 
 import numpy as np
 
-from t3d_server.algorithm_utils.Image2AlignmentRunner import (
+from compox.algorithm_utils.Image2AlignmentRunner import (
     Image2AlignmentRunner,
 )
 from image_registration.registration_utils import get_random_translation

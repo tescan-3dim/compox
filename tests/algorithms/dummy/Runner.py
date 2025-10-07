@@ -4,7 +4,7 @@ All rights reserved
 """
 
 import numpy as np
-from t3d_server.algorithm_utils.Image2ImageRunner import Image2ImageRunner
+from compox.algorithm_utils.Image2ImageRunner import Image2ImageRunner
 
 
 class Runner(Image2ImageRunner):

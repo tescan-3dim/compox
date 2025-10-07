@@ -2,7 +2,7 @@
 name = "bar"
 version = "1.1.0"
 
-[tool.t3dserver]
+[tool.compox]
 algorithm_type = "Generic"
 tags = ["test"]
 description = "Outputs a bar."

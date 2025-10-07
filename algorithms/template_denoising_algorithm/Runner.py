@@ -6,7 +6,7 @@ All rights reserved
 from image_denoising.denoising_utils import denoise_image
 import numpy as np
 
-from t3d_server.algorithm_utils.Image2ImageRunner import Image2ImageRunner
+from compox.algorithm_utils.Image2ImageRunner import Image2ImageRunner
 
 
 class Runner(Image2ImageRunner):

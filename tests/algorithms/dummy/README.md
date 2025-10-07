@@ -1,6 +1,6 @@
 # A general template for creating a denoising algorithm
 
-Here a working template for developing a denoising algorithm will be presented. This guide will cover the specifics needed to develop an image denoising algorithm. To see how the t3dserver algorithm should generally be structured, please refer to the algorithms/readme.md file.
+Here a working template for developing a denoising algorithm will be presented. This guide will cover the specifics needed to develop an image denoising algorithm. To see how the compox algorithm should generally be structured, please refer to the algorithms/readme.md file.
 
 The algorithm folder is structured as follows:
 
@@ -17,9 +17,9 @@ template_denoising_algorithm/
 
 ## The pyproject.toml file
 
-The `pyproject.toml` is a file that contains the algorithm metadata. This file is used by the t3dserver to properly deploy the algorithm as a service. The `pyproject.toml` file should be placed in the root directory of the algorithm.
+The `pyproject.toml` is a file that contains the algorithm metadata. This file is used by the compox to properly deploy the algorithm as a service. The `pyproject.toml` file should be placed in the root directory of the algorithm.
 
-First, let's create the `pyproject.toml` file. Under the [project] section, you should provide the name and version of the algorithm. The name should be unique and should not contain any spaces. The version should be in the format `major.minor.patch`. The algorithm name and versions is used to identify the algorithm in the t3dserver so it is important to provide a unique name and version.
+First, let's create the `pyproject.toml` file. Under the [project] section, you should provide the name and version of the algorithm. The name should be unique and should not contain any spaces. The version should be in the format `major.minor.patch`. The algorithm name and versions is used to identify the algorithm in the compox so it is important to provide a unique name and version.
 
 ```toml
 [project]
@@ -27,14 +27,14 @@ name = "template_denosing_algorithm"
 version = "1.0.0"
 ```
 
-Next, you should fill out the [tool.t3dserver] section. This section contains the metadata that the t3dserver uses to deploy the algorithm as a service. `algorithm_type` defines the algorithm input and output types, you may either use some predefined algorithm types or define your own. The predefined algorithm types are located in `t3d_server.algorithm_utils`. For an image denoising algorithm, we will use the the `Image2Image` type. This type is suitable for image denoising as both our input and output is an image (or a sequence of images).
+Next, you should fill out the [tool.compox] section. This section contains the metadata that the compox uses to deploy the algorithm as a service. `algorithm_type` defines the algorithm input and output types, you may either use some predefined algorithm types or define your own. The predefined algorithm types are located in `compox.algorithm_utils`. For an image denoising algorithm, we will use the the `Image2Image` type. This type is suitable for image denoising as both our input and output is an image (or a sequence of images).
 
 ```toml
-[tool.t3dserver]
+[tool.compox]
 algorithm_type = "Image2Image"
 ```
 
- Each algorithm type has a set of potential tags, which are used to specify the general algorithm functionality. These tags can be found and modified in the `t3d_server\algorithm_utils\algorithm_tags.yaml` file. Mutliple tags can be provided for one algorithm. For image denoising algorithms, we will use the `image-denoising` tag. 
+ Each algorithm type has a set of potential tags, which are used to specify the general algorithm functionality. These tags can be found and modified in the `compox\algorithm_utils\algorithm_tags.yaml` file. Mutliple tags can be provided for one algorithm. For image denoising algorithms, we will use the `image-denoising` tag. 
  
  ```toml
 tags = ["image-denoising"]
@@ -56,19 +56,19 @@ additional_parameters = [
 ]
 ```
 
-The `check_importable` field is used to check if the algorithm can be imported. If set to `true`, the t3dserver will check if the algorithm can be imported before deploying it as a service. (NOTE: THIS CURRENTLY DOES NOT WORK).
+The `check_importable` field is used to check if the algorithm can be imported. If set to `true`, the compox will check if the algorithm can be imported before deploying it as a service. (NOTE: THIS CURRENTLY DOES NOT WORK).
 
 ```toml
 check_importable = false
 ```
 
-The `obfuscate` field is used to obfuscate the algorithm code. If set to `true`, the t3dserver will obfuscate the algorithm code before deploying it as a service. The obfuscation is currently implemented as minimization of the code. It is recommended to set this field to `true` to reasonably protect the algorithm code.
+The `obfuscate` field is used to obfuscate the algorithm code. If set to `true`, the compox will obfuscate the algorithm code before deploying it as a service. The obfuscation is currently implemented as minimization of the code. It is recommended to set this field to `true` to reasonably protect the algorithm code.
 
 ```toml
 obfuscate = true
 ```
 
-You can use the `hash_module` and `hash_assets` fields to check if the algorithm module or assets have already been deployed. If they have been deployed, the t3dserver will not redeploy them, but reuse them for the current algorithm deployment. This can reduce the deployment time and the amount of data that needs to be stored.
+You can use the `hash_module` and `hash_assets` fields to check if the algorithm module or assets have already been deployed. If they have been deployed, the compox will not redeploy them, but reuse them for the current algorithm deployment. This can reduce the deployment time and the amount of data that needs to be stored.
 
 ```toml
 hash_module = true
@@ -77,7 +77,7 @@ hash_assets = true
 
 ## The algorithm dependencies
 
-The algorithm can use any libraries from the global t3dserver environment. Additional dependencies can be provided as python submodules. Here we will use the `numpy` library to handle the image data. We also implemented a simple `image_denoising` module that contains an `__init__.py` file and a `denosing_utils.py` file. The `denoising_utils.py` file contains the `denoise_image` function that performs the denoising of the images. The `image_denoising` module should be placed in the root directory of the algorithm.
+The algorithm can use any libraries from the global compox environment. Additional dependencies can be provided as python submodules. Here we will use the `numpy` library to handle the image data. We also implemented a simple `image_denoising` module that contains an `__init__.py` file and a `denosing_utils.py` file. The `denoising_utils.py` file contains the `denoise_image` function that performs the denoising of the images. The `image_denoising` module should be placed in the root directory of the algorithm.
 
 ```python
 from skimage.restoration import (
@@ -106,11 +106,11 @@ def denoise_image(image, weight=0.1):
 
 The `Runner.py` file is the main file of the algorithm. This file should contain the algorithm implementation. The `Runner.py` file should be placed in the root directory of the algorithm.
 
-Because we specified the algorithm type as `Image2Image`, the `Runner.py` file should contain a class that inherits from the `Image2ImageRunner` class. The `Image2ImageRunner` class is located in the `t3d_server.algorithm_utils` module. The `Image2ImageRunner` class contains the necessary methods to handle the input and output of the algorithm.
+Because we specified the algorithm type as `Image2Image`, the `Runner.py` file should contain a class that inherits from the `Image2ImageRunner` class. The `Image2ImageRunner` class is located in the `compox.algorithm_utils` module. The `Image2ImageRunner` class contains the necessary methods to handle the input and output of the algorithm.
 
 
 ```python
-from t3d_server.algorithm_utils.Image2ImageRunner import Image2ImageRunner
+from compox.algorithm_utils.Image2ImageRunner import Image2ImageRunner
 
 class Runner(Image2ImageRunner):
     """
@@ -258,4 +258,4 @@ def postprocess(self, data: np.array, args: dict = {}) -> list[str]:
 
 ## Deploying the algorithm
 
-To deploy the finished algorithm, you can use the `pdm run deployment template_denoising_algorithm` command. This command will deploy the algorithm to the t3dserver. The algorithm can also be added through the t3dserver systray interface by clicking the "Add Algorithm" button and selecting the algorithm directory.
+To deploy the finished algorithm, you can use the `pdm run deployment template_denoising_algorithm` command. This command will deploy the algorithm to the compox. The algorithm can also be added through the compox systray interface by clicking the "Add Algorithm" button and selecting the algorithm directory.
