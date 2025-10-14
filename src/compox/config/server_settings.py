@@ -32,7 +32,6 @@ class CompoxInfo(BaseModel):
     group_name: str = "TESCAN GROUP, a.s."
     organization_name: str = "TESCAN 3DIM, s.r.o."
     organization_domain: str = "tescan3dim.com"
-    version: str = "0.1"
     @model_validator(mode="after")
     def add_default_tag(self):
         if "compox" not in self.server_tags:

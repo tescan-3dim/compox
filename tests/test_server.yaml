@@ -6,7 +6,6 @@ info:
   group_name: "TESCAN GROUP, a.s."
   organization_name: "TESCAN 3DIM, s.r.o."
   organization_domain: "tescan3dim.com"
-  version: "0.1"
 
 gui:
   algorithm_add_remove_in_menus: true

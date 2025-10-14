@@ -45,7 +45,7 @@ class ServerSystrayInterface(pystray.Icon):
         """
         self.logger = logger.bind(log_type="SYSTRAY")
         self._name = settings.info.product_name
-        self._version = settings.info.version
+        
         self._group_name = settings.info.group_name
         self._organization_name = settings.info.organization_name
         self._organization_domain = settings.info.organization_domain
@@ -56,6 +56,7 @@ class ServerSystrayInterface(pystray.Icon):
         )
         self._menu = menu
         self._title = settings.info.product_name
+        self._displayed_version = server._version
         self.__initialize_menu(app, server, config)
 
         icon_img = Image.open(settings.gui.icon_path)
@@ -259,7 +260,7 @@ class ServerSystrayInterface(pystray.Icon):
         threading.Thread(target=remove_algorithms).start()
 
     def on_about(self, config):
-        version = f"version {self._version}"
+        version = f"version {self._displayed_version}"
         self.notify(
             self._group_name
             + "\n"

@@ -2,6 +2,7 @@ import os
 import logging
 import time
 import threading
+import importlib.metadata
 from loguru import logger
 from contextlib import contextmanager
 
@@ -10,6 +11,7 @@ from fastapi import FastAPI
 
 from compox.config.server_settings import Settings
 from compox.internal.logging import configure_logging
+import compox
 
 
 class Compox(uvicorn.Server):
@@ -21,6 +23,7 @@ class Compox(uvicorn.Server):
         super().__init__(config)
         self.config = config
         self.logger = logger
+        self._version = importlib.metadata.version('compox')
 
     def install_signal_handlers(self):
         pass
@@ -90,5 +93,5 @@ def build_server(
 
     backend_logger.info("Building server")
     server = Compox(config=config, logger=backend_logger)
-    server.logger.info("Server set up done")
+    backend_logger.info(f"Server v{server._version} set up done")
     return server

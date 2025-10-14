@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
 
 [project]
 name = "compox"
-version = "1.0.18"
+dynamic = ["version"]
 description = ""
 authors = [
 {name = "Jan Matula", email = "jan.matula@tescan.com"},
@@ -41,8 +41,12 @@ license = "Apache-2.0 AND LicenseRef-Commons-Clause-1.0"
 license-files = [
   "LICENSE",
   "NOTICE",
-  "THIRD-PARTY-LICENSES*"
+  "THIRD_PARTY_LICENSES.txt"
 ]
+
+[tool.pdm.version]
+source = "scm"
+tag_filter = "compox-v*"
 
 [tool.uv]
 package = true

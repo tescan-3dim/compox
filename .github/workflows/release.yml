@@ -1,4 +1,4 @@
-name: Build & publish (TestPyPI)
+name: Build & publish (PyPI)
 
 on:
   push:
@@ -26,12 +26,12 @@ jobs:
           name: dist
           path: dist/
 
-  publish-testpypi:
+  publish-pypi:
     needs: build
     runs-on: ubuntu-latest
     environment:
-      name: testpypi
-      url: https://test.pypi.org/project/compox/
+      name: pypi
+      url: https://pypi.org/project/compox/
     permissions:
       id-token: write
       contents: read
@@ -41,8 +41,7 @@ jobs:
         with:
           name: dist
           path: dist/
-      - name: Publish to TestPyPI (Trusted Publishing)
+      - name: Publish to PyPI (Trusted Publishing)
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          repository-url: https://test.pypi.org/legacy/
           skip-existing: true
