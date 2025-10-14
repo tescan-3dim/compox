@@ -1,6 +1,6 @@
 # A general template for creating a segmentation algorithm
 
-This guide will cover the specifics needed to develop an image image segmentation algorithm. To see how the compox algorithm should generally be structured, please refer to the algorithms/readme.md file.
+This guide will cover the specifics needed to develop an image image segmentation algorithm. To see how compox algorithm should generally be structured, please refer to the algorithms/readme.md file.
 
 The algorithm folder is structured as follows:
 
@@ -17,9 +17,9 @@ template_segmentation_algorithm/
 
 ## The pyproject.toml file
 
-The `pyproject.toml` is a file that contains the algorithm metadata. This file is used by the compox to properly deploy the algorithm as a service. The `pyproject.toml` file should be placed in the root directory of the algorithm.
+The `pyproject.toml` is a file that contains the algorithm metadata. This file is used by compox to properly deploy the algorithm as a service. The `pyproject.toml` file should be placed in the root directory of the algorithm.
 
-First, let's create the `pyproject.toml` file. Under the [project] section, you should provide the name and version of the algorithm. The name should be unique and should not contain any spaces. The version should be in the format `major.minor.patch`. The algorithm name and versions is used to identify the algorithm in the compox so it is important to provide a unique name and version.
+First, let's create the `pyproject.toml` file. Under the [project] section, you should provide the name and version of the algorithm. The name should be unique and should not contain any spaces. The version should be in the format `major.minor.patch`. The algorithm name and versions is used to identify the algorithm in compox so it is important to provide a unique name and version.
 
 ```toml
 [project]
@@ -27,7 +27,7 @@ name = "template_segmentation_algorithm"
 version = "1.0.0"
 ```
 
-Next, we will fill out the [tool.compox] section. This section contains the metadata that the compox uses to deploy the algorithm as a service. `algorithm_type` defines the algorithm input and output types, you may either use some predefined algorithm types or define your own. The predefined algorithm types are located in `compox.algorithm_utils`. For an image segmentation algorithm, we will use the the `Image2Segmentation` type. This type is suitable for image segmentation as the input is a sequence of images and the output is a sequence of segmentation masks.
+Next, we will fill out the [tool.compox] section. This section contains the metadata that compox uses to deploy the algorithm as a service. `algorithm_type` defines the algorithm input and output types, you may either use some predefined algorithm types or define your own. The predefined algorithm types are located in `compox.algorithm_utils`. For an image segmentation algorithm, we will use the the `Image2Segmentation` type. This type is suitable for image segmentation as the input is a sequence of images and the output is a sequence of segmentation masks.
 
 ```toml
 [tool.compox]
@@ -56,19 +56,19 @@ additional_parameters = [
 ]
 ```
 
-The `check_importable` field is used to check if the algorithm can be imported. If set to `true`, the compox will check if the algorithm can be imported before deploying it as a service. (NOTE: THIS CURRENTLY DOES NOT WORK).
+The `check_importable` field is used to check if the algorithm can be imported. If set to `true`, compox will check if the algorithm can be imported before deploying it as a service. (NOTE: THIS CURRENTLY DOES NOT WORK).
 
 ```toml
 check_importable = false
 ```
 
-The `obfuscate` field is used to obfuscate the algorithm code. If set to `true`, the compox will obfuscate the algorithm code before deploying it as a service. The obfuscation is currently implemented as minimization of the code. It is recommended to set this field to `true` to reasonably protect the algorithm code.
+The `obfuscate` field is used to obfuscate the algorithm code. If set to `true`, compox will obfuscate the algorithm code before deploying it as a service. The obfuscation is currently implemented as minimization of the code. It is recommended to set this field to `true` to reasonably protect the algorithm code.
 
 ```toml
 obfuscate = true
 ```
 
-You can use the `hash_module` and `hash_assets` fields to check if the algorithm module or assets have already been deployed. If they have been deployed, the compox will not redeploy them, but reuse them for the current algorithm deployment. This can reduce the deployment time and the amount of data that needs to be stored.
+You can use the `hash_module` and `hash_assets` fields to check if the algorithm module or assets have already been deployed. If they have been deployed, compox will not redeploy them, but reuse them for the current algorithm deployment. This can reduce the deployment time and the amount of data that needs to be stored.
 
 ```toml
 hash_module = true
@@ -162,8 +162,8 @@ def load_assets(self):
 ```
 
 Next, we can implement the `inference` method, where we perform the segmentation of the images. The `inference` will receive a numpy array with the images to be segmented. The `inference` method must return a numpy array with the segmentation masks of the same
-shape as the input images. The `inference` method can also receive a dictionary with the arguments for the algorithm. The arguments are passed to the algorithm from the compox and can be used to customize the behavior of the algorithm. In our case, we will use the `thresholding_algorithm` argument to specify the thresholding algorithm to use.
-You can also report the progress of the algorithm by calling the `set_progress` method. The `set_progress` method takes a float value between 0 and 1, where 0 is the start of the algorithm and 1 is the end of the algorithm. The `log_message` method can be used to log messages to the compox log.
+shape as the input images. The `inference` method can also receive a dictionary with the arguments for the algorithm. The arguments are passed to the algorithm from compox and can be used to customize the behavior of the algorithm. In our case, we will use the `thresholding_algorithm` argument to specify the thresholding algorithm to use.
+You can also report the progress of the algorithm by calling the `set_progress` method. The `set_progress` method takes a float value between 0 and 1, where 0 is the start of the algorithm and 1 is the end of the algorithm. The `log_message` method can be used to log messages to compox log.
 
 ```python
 def inference(self, data: np.ndarray, args: dict = {}) -> np.ndarray:
@@ -203,4 +203,4 @@ To customize the behavior of fetching and processing the input data, and postpro
 
 ## Deploying the algorithm
 
-To deploy the finished algorithm, you can use the `pdm run deployment template_segmentation_algorithm` command. This command will deploy the algorithm to the compox. The algorithm can also be added through the compox systray interface by clicking the "Add Algorithm" button and selecting the algorithm directory.
+To deploy the finished algorithm, you can use the `pdm run deployment template_segmentation_algorithm` command. This command will deploy the algorithm to the compox. The algorithm can also be added through compox systray interface by clicking the "Add Algorithm" button and selecting the algorithm directory.

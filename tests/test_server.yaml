@@ -21,7 +21,7 @@ storage:
     port: 9091
     console_port: 9090
     executable_path: "minio/TESCAN3DBackendDB.exe"
-    storage_path: "minio/t3d_server_store"
+    storage_path: "minio/compox_store"
 
 inference:
   device: "cuda"

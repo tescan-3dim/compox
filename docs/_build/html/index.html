@@ -43,7 +43,7 @@
               <!-- Local TOC -->
               <div class="local-toc"><ul>
 <li><a class="reference internal" href="#">Welcome to the t3dserver documentation!</a><ul>
-<li><a class="reference internal" href="#installation-and-running-instructions-for-the-t3d-server">Installation and running instructions for the T3D server</a><ul>
+<li><a class="reference internal" href="#installation-and-running-instructions-for-the-compox">Installation and running instructions for the Compox</a><ul>
 <li><a class="reference internal" href="#documentation">Documentation</a></li>
 <li><a class="reference internal" href="#environment-setup">Environment setup</a></li>
 <li><a class="reference internal" href="#configuration-and-launching">Configuration and launching</a><ul>
@@ -444,12 +444,12 @@
              
   <section id="welcome-to-the-t3dserver-documentation">
 <h1>Welcome to the t3dserver documentation!<a class="headerlink" href="#welcome-to-the-t3dserver-documentation" title="Link to this heading"></a></h1>
-<section id="installation-and-running-instructions-for-the-t3d-server">
-<h2>Installation and running instructions for the T3D server<a class="headerlink" href="#installation-and-running-instructions-for-the-t3d-server" title="Link to this heading"></a></h2>
-<p>t3d server is a simple Python execution engine based on FastAPI with a MinIO object storage and Celery task queue. The app is designed to run algorithms written in Python on the server and report the results to the user.</p>
+<section id="installation-and-running-instructions-for-the-compox">
+<h2>Installation and running instructions for the Compox<a class="headerlink" href="#installation-and-running-instructions-for-the-compox" title="Link to this heading"></a></h2>
+<p>compox is a simple Python execution engine based on FastAPI with a MinIO object storage and Celery task queue. The app is designed to run algorithms written in Python on the server and report the results to the user.</p>
 <section id="documentation">
 <h3>Documentation<a class="headerlink" href="#documentation" title="Link to this heading"></a></h3>
-<p>At this point, the documentation is not available online. You can serve the documentation locally by running the following command in the <code class="docutils literal notranslate"><span class="pre">t3d_server</span></code> directory:</p>
+<p>At this point, the documentation is not available online. You can serve the documentation locally by running the following command in the <code class="docutils literal notranslate"><span class="pre">compox</span></code> directory:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pdm<span class="w"> </span>run<span class="w"> </span>serve_docs
 </pre></div>
 </div>
@@ -468,9 +468,9 @@
 </pre></div>
 </div>
 </li>
-<li><p>Clone the repository and navigate to the <code class="docutils literal notranslate"><span class="pre">t3d_server</span></code> directory.</p>
+<li><p>Clone the repository and navigate to the <code class="docutils literal notranslate"><span class="pre">compox</span></code> directory.</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>https://gitlab.t3d.team/dl/python-computing-backend
-<span class="nb">cd</span><span class="w"> </span>t3d_server
+<span class="nb">cd</span><span class="w"> </span>compox
 </pre></div>
 </div>
 </li>
@@ -479,7 +479,7 @@
 </pre></div>
 </div>
 </li>
-<li><p>The server uses MinIO for storing files. The MinIO server will be downloaded to the <em>t3d_server/minio</em> directory by default after running the pdm install command. If for some reason the minio binary download fails, you may either download the binary manually from the MinIO website (<code class="docutils literal notranslate"><span class="pre">https://min.io/download</span></code>) and place it in the <em>t3d_server/minio</em> directory or run the following command in the <em>t3d_server</em> directory:</p>
+<li><p>The server uses MinIO for storing files. The MinIO server will be downloaded to the <em>compox/minio</em> directory by default after running the pdm install command. If for some reason the minio binary download fails, you may either download the binary manually from the MinIO website (<code class="docutils literal notranslate"><span class="pre">https://min.io/download</span></code>) and place it in the <em>compox/minio</em> directory or run the following command in the <em>compox</em> directory:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pdm<span class="w"> </span>run<span class="w"> </span>get_minio
 </pre></div>
 </div>
@@ -492,9 +492,9 @@
 <section id="server-settings">
 <h4>Server Settings<a class="headerlink" href="#server-settings" title="Link to this heading"></a></h4>
 <ul class="simple">
-<li><p><strong>t3d_server_port</strong>: <code class="docutils literal notranslate"><span class="pre">5461</span></code></p>
+<li><p><strong>compox_port</strong>: <code class="docutils literal notranslate"><span class="pre">5461</span></code></p>
 <ul>
-<li><p>Defines the port on which the T3D server runs.</p></li>
+<li><p>Defines the port on which the Compox runs.</p></li>
 </ul>
 </li>
 </ul>
@@ -567,7 +567,7 @@
 <li><p>Path to the MinIO executable.</p></li>
 </ul>
 </li>
-<li><p><strong>minio_storage_path</strong>: <code class="docutils literal notranslate"><span class="pre">minio/t3d_server_store</span></code></p>
+<li><p><strong>minio_storage_path</strong>: <code class="docutils literal notranslate"><span class="pre">minio/compox_store</span></code></p>
 <ul>
 <li><p>Path for MinIO storage.</p></li>
 </ul>
@@ -703,8 +703,8 @@
 <li><p>MinIO settings must align with whether it is run locally or through an external S3 service.</p></li>
 </ul>
 <ol class="arabic" start="2">
-<li><p>To run the server, run the following command in the <code class="docutils literal notranslate"><span class="pre">t3d_server</span></code> directory:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pdm<span class="w"> </span>run<span class="w"> </span>t3d_server<span class="w"> </span>-c<span class="w"> </span>config.yaml
+<li><p>To run the server, run the following command in the <code class="docutils literal notranslate"><span class="pre">compox</span></code> directory:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pdm<span class="w"> </span>run<span class="w"> </span>compox<span class="w"> </span>-c<span class="w"> </span>config.yaml
 </pre></div>
 </div>
 <ul class="simple">
@@ -719,7 +719,7 @@
 <section id="deploying-algorithms-to-the-server">
 <h3>Deploying algorithms to the server<a class="headerlink" href="#deploying-algorithms-to-the-server" title="Link to this heading"></a></h3>
 <ol class="arabic">
-<li><p>The algorithms provided in the <code class="docutils literal notranslate"><span class="pre">algorithms</span></code> directory require some additional files to be downloaded from our NextCloud server. These files are defined in the <code class="docutils literal notranslate"><span class="pre">algorithms/assets.yaml</span></code> file. To download the files, run the following command in the <code class="docutils literal notranslate"><span class="pre">t3d_server</span></code> directory:</p>
+<li><p>The algorithms provided in the <code class="docutils literal notranslate"><span class="pre">algorithms</span></code> directory require some additional files to be downloaded from our NextCloud server. These files are defined in the <code class="docutils literal notranslate"><span class="pre">algorithms/assets.yaml</span></code> file. To download the files, run the following command in the <code class="docutils literal notranslate"><span class="pre">compox</span></code> directory:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pdm<span class="w"> </span>run<span class="w"> </span>get_algorithm_files_from_nc<span class="w"> </span>nc_username<span class="w"> </span>nc_password
 </pre></div>
 </div>
@@ -727,7 +727,7 @@
 <li><p>Replace <em>nc_username</em> and <em>nc_password</em> with the ML-user credentials for the NextCloud server (see our wiki for the credentials: https://gitlab.t3d.team/dl/cnn-training/-/wikis/Datasets/Data-management-and-processes).</p></li>
 </ul>
 </li>
-<li><p>After the files are downloaded, you can deploy the algorithms running the following command in the <code class="docutils literal notranslate"><span class="pre">t3d_server</span></code> directory. The deployment script will launch its own server instance and register the algorithms.</p>
+<li><p>After the files are downloaded, you can deploy the algorithms running the following command in the <code class="docutils literal notranslate"><span class="pre">compox</span></code> directory. The deployment script will launch its own server instance and register the algorithms.</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pdm<span class="w"> </span>run<span class="w"> </span>deployment
 </pre></div>
 </div>
@@ -735,7 +735,7 @@
 <li><p>The algorithms should now be registered and ready to be run.</p></li>
 </ul>
 </li>
-<li><p>You can also deploy only a specific algorithm from the <code class="docutils literal notranslate"><span class="pre">algorithms</span></code> directory by running the following command in the <code class="docutils literal notranslate"><span class="pre">t3d_server</span></code> directory:</p>
+<li><p>You can also deploy only a specific algorithm from the <code class="docutils literal notranslate"><span class="pre">algorithms</span></code> directory by running the following command in the <code class="docutils literal notranslate"><span class="pre">compox</span></code> directory:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pdm<span class="w"> </span>run<span class="w"> </span>deployment<span class="w"> </span>algorithm_name
 </pre></div>
 </div>
@@ -753,18 +753,18 @@
 <section id="running-tests-and-demo-app">
 <h3>Running tests and demo app<a class="headerlink" href="#running-tests-and-demo-app" title="Link to this heading"></a></h3>
 <ol class="arabic">
-<li><p>After registration, you can run tests by running the following command in the <em>t3d_server</em> directory:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pdm<span class="w"> </span>run<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--t3d_server_url<span class="w"> </span><span class="s2">&quot;server_url&quot;</span>
+<li><p>After registration, you can run tests by running the following command in the <em>compox</em> directory:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pdm<span class="w"> </span>run<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--compox_url<span class="w"> </span><span class="s2">&quot;server_url&quot;</span>
 </pre></div>
 </div>
 <p>This command will run the tests against an existing server instance. Replace <em>server_url</em> with the URL of the server instance you want to test.</p>
 <p>Or you can run the tests against a dynamically created server instance by running the following command:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pdm<span class="w"> </span>run<span class="w"> </span>tests<span class="w"> </span>--t3d_server_config_path<span class="w"> </span><span class="s2">&quot;config.yaml&quot;</span>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pdm<span class="w"> </span>run<span class="w"> </span>tests<span class="w"> </span>--compox_config_path<span class="w"> </span><span class="s2">&quot;config.yaml&quot;</span>
 </pre></div>
 </div>
 <p>Replace <em>config.yaml</em> with the path to the configuration file you want to use for tested server instance. Algorithms necessary for the tests will be deployed automatically.</p>
 </li>
-<li><p>You can launch a simple Streamlit demo app by running the following command in the <em>t3d_server</em> directory:</p>
+<li><p>You can launch a simple Streamlit demo app by running the following command in the <em>compox</em> directory:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pdm<span class="w"> </span>run<span class="w"> </span>run_demo_app
 </pre></div>
 </div>
@@ -798,7 +798,7 @@
 </div>
 <section id="the-runner-py-file">
 <h3>The Runner.py file<a class="headerlink" href="#the-runner-py-file" title="Link to this heading"></a></h3>
-<p>The Runner.py file is a mandatory component of the algorithm module. It serves as the entry point for the python computing backend to run the algorithm. It must define a class named Runner. The Runner class should inherit either from the BaseRunner class, or a Runner class specific to the algorithm type (see more in the algorithm types section). The Runner classes can be imported from the t3d_server.algorithm_utils module. There are several mandatory methods that the Runner class must implement in order to work properly. The Runner class can also implement additional methods and functions that are not mandatory. But these can also be included as a submodule in the algorithm directory.</p>
+<p>The Runner.py file is a mandatory component of the algorithm module. It serves as the entry point for the python computing backend to run the algorithm. It must define a class named Runner. The Runner class should inherit either from the BaseRunner class, or a Runner class specific to the algorithm type (see more in the algorithm types section). The Runner classes can be imported from the compox.algorithm_utils module. There are several mandatory methods that the Runner class must implement in order to work properly. The Runner class can also implement additional methods and functions that are not mandatory. But these can also be included as a submodule in the algorithm directory.</p>
 <section id="algorithm-types">
 <h4>Algorithm types<a class="headerlink" href="#algorithm-types" title="Link to this heading"></a></h4>
 <p>There are several types of algorithms that can be implemented in the computing backend. The main difference between the algorithm types is in the way input and output data is handled. The algorihtm type is defined in the algorithm’s <code class="docutils literal notranslate"><span class="pre">pyproject.toml</span></code> file and the class, from which the Runner class should inherit. An example of algorithm type is e.g. and Image2Image algorithm, which receives an image as input and returns an image as output. The pyproject.toml file should thus contain the following line:</p>
@@ -806,8 +806,8 @@
 <span class="n">algorithm_type</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;Image2Image&quot;</span>
 </pre></div>
 </div>
-<p>Furthermore the algotihm’s Runner class should inherit from the Image2ImageRunner class, which is imported from the t3d_server.algorithm_utils module:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">t3d_server.algorithm_utils.Image2ImageRunner</span><span class="w"> </span><span class="kn">import</span> <span class="n">Image2ImageRunner</span>
+<p>Furthermore the algotihm’s Runner class should inherit from the Image2ImageRunner class, which is imported from the compox.algorithm_utils module:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">compox.algorithm_utils.Image2ImageRunner</span><span class="w"> </span><span class="kn">import</span> <span class="n">Image2ImageRunner</span>
 
 <span class="k">class</span><span class="w"> </span><span class="nc">Runner</span><span class="p">(</span><span class="n">Image2ImageRunner</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
@@ -828,11 +828,11 @@
 <li><p>Image2Segmentation: The algorithm receives an image as input and returns a segmentation mask as output.</p></li>
 <li><p>Image2Alignment: The algorithm receives two images as input and returns an alignment transformation matrix as output.</p></li>
 </ul>
-<p>If the algorithm does not fit into any of the above categories, the Runner class can either inherit from the BaseRunner class, and the data schemas can be defined manually (more on that in the next section), or a new algorithm type can be defined in the t3d_server.algorithm_utils module.</p>
+<p>If the algorithm does not fit into any of the above categories, the Runner class can either inherit from the BaseRunner class, and the data schemas can be defined manually (more on that in the next section), or a new algorithm type can be defined in the compox.algorithm_utils module.</p>
 </section>
 <section id="algorithm-tags">
 <h4>Algorithm tags<a class="headerlink" href="#algorithm-tags" title="Link to this heading"></a></h4>
-<p>The algorithm tags are a useful tool to categorize the algorithms for the users in the frontend application. Each algorithm type has a set of predefined tags, which are used to categorize the algorithms. This is important, because when several algorithms are tagged by a specific tag, the frontend developer can then operate with the assumption, that the algorithms with the same tag have the same input and output data schemas. The tags are defined in the <code class="docutils literal notranslate"><span class="pre">t3d_server/src/t3d_server/algorithm_utils/algorithm_tags.yaml</span></code> file. This file can be edited by the developer to add new tags or modify the existing ones.</p>
+<p>The algorithm tags are a useful tool to categorize the algorithms for the users in the frontend application. Each algorithm type has a set of predefined tags, which are used to categorize the algorithms. This is important, because when several algorithms are tagged by a specific tag, the frontend developer can then operate with the assumption, that the algorithms with the same tag have the same input and output data schemas. The tags are defined in the <code class="docutils literal notranslate"><span class="pre">compox/src/compox/algorithm_utils/algorithm_tags.yaml</span></code> file. This file can be edited by the developer to add new tags or modify the existing ones.</p>
 </section>
 <section id="the-preprocess-inference-and-postprocess-methods">
 <h4>The <code class="docutils literal notranslate"><span class="pre">preprocess</span></code>, <code class="docutils literal notranslate"><span class="pre">inference</span></code> and <code class="docutils literal notranslate"><span class="pre">postprocess</span></code> methods<a class="headerlink" href="#the-preprocess-inference-and-postprocess-methods" title="Link to this heading"></a></h4>
@@ -923,7 +923,7 @@
 </pre></div>
 </div>
 <p>Even though the following fields are not mandatory, it is recommended to include them in the <code class="docutils literal notranslate"><span class="pre">pyproject.toml</span></code> file to make the algorithm as user-friendly and compatible with the t3dserver as possible.</p>
-<p>The algorithm type should be specified in the <code class="docutils literal notranslate"><span class="pre">tool.t3dserver</span></code> section. The algorithm type is used to specify the general algorithm functionality. The algorithm type is used to determine the input and output data schemas, and the general algorithm behavior. The algorithm type is defined in the t3d_server.algorithm_utils module.</p>
+<p>The algorithm type should be specified in the <code class="docutils literal notranslate"><span class="pre">tool.t3dserver</span></code> section. The algorithm type is used to specify the general algorithm functionality. The algorithm type is used to determine the input and output data schemas, and the general algorithm behavior. The algorithm type is defined in the compox.algorithm_utils module.</p>
 </section>
 <section id="algorithm-type-tags-and-description">
 <h4>Algorithm type, tags, and description<a class="headerlink" href="#algorithm-type-tags-and-description" title="Link to this heading"></a></h4>
@@ -931,7 +931,7 @@
 <span class="n">algorithm_type</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;AlgorithmType&quot;</span>
 </pre></div>
 </div>
-<p>Each algorithm type has a set of potential tags, which are used to specify the general algorithm functionality. These tags can be found and modified in the <code class="docutils literal notranslate"><span class="pre">t3d_server\algorithm_utils\algorithm_tags.yaml</span></code> file. Multiple tags can be provided for one algorithm. For image denoising algorithms, we will use the <code class="docutils literal notranslate"><span class="pre">image-denoising</span></code> tag.</p>
+<p>Each algorithm type has a set of potential tags, which are used to specify the general algorithm functionality. These tags can be found and modified in the <code class="docutils literal notranslate"><span class="pre">compox\algorithm_utils\algorithm_tags.yaml</span></code> file. Multiple tags can be provided for one algorithm. For image denoising algorithms, we will use the <code class="docutils literal notranslate"><span class="pre">image-denoising</span></code> tag.</p>
 <div class="highlight-toml notranslate"><div class="highlight"><pre><span></span><span class="n">tags</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;tag1&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;tag2&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;tag3&quot;</span><span class="p">,</span><span class="w"> </span><span class="err">...]</span>
 </pre></div>
 </div>
@@ -1248,12 +1248,12 @@
 <span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;1.0.0&quot;</span>
 </pre></div>
 </div>
-<p>Next, you should fill out the [tool.t3dserver] section. This section contains the metadata that the t3dserver uses to deploy the algorithm as a service. <code class="docutils literal notranslate"><span class="pre">algorithm_type</span></code> defines the algorithm input and output types, you may either use some predefined algorithm types or define your own. The predefined algorithm types are located in <code class="docutils literal notranslate"><span class="pre">t3d_server.algorithm_utils</span></code>. For an image denoising algorithm, we will use the the <code class="docutils literal notranslate"><span class="pre">Image2Image</span></code> type. This type is suitable for image denoising as both our input and output is an image (or a sequence of images).</p>
+<p>Next, you should fill out the [tool.t3dserver] section. This section contains the metadata that the t3dserver uses to deploy the algorithm as a service. <code class="docutils literal notranslate"><span class="pre">algorithm_type</span></code> defines the algorithm input and output types, you may either use some predefined algorithm types or define your own. The predefined algorithm types are located in <code class="docutils literal notranslate"><span class="pre">compox.algorithm_utils</span></code>. For an image denoising algorithm, we will use the the <code class="docutils literal notranslate"><span class="pre">Image2Image</span></code> type. This type is suitable for image denoising as both our input and output is an image (or a sequence of images).</p>
 <div class="highlight-toml notranslate"><div class="highlight"><pre><span></span><span class="k">[tool.t3dserver]</span>
 <span class="n">algorithm_type</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;Image2Image&quot;</span>
 </pre></div>
 </div>
-<p>Each algorithm type has a set of potential tags, which are used to specify the general algorithm functionality. These tags can be found and modified in the <code class="docutils literal notranslate"><span class="pre">t3d_server\algorithm_utils\algorithm_tags.yaml</span></code> file. Mutliple tags can be provided for one algorithm. For image denoising algorithms, we will use the <code class="docutils literal notranslate"><span class="pre">image-denoising</span></code> tag.</p>
+<p>Each algorithm type has a set of potential tags, which are used to specify the general algorithm functionality. These tags can be found and modified in the <code class="docutils literal notranslate"><span class="pre">compox\algorithm_utils\algorithm_tags.yaml</span></code> file. Mutliple tags can be provided for one algorithm. For image denoising algorithms, we will use the <code class="docutils literal notranslate"><span class="pre">image-denoising</span></code> tag.</p>
 <div class="highlight-toml notranslate"><div class="highlight"><pre><span></span><span class="n">tags</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;image-denoising&quot;</span><span class="p">]</span>
 </pre></div>
 </div>
@@ -1312,8 +1312,8 @@
 <section id="the-runner-py-file">
 <h3>The Runner.py file<a class="headerlink" href="#the-runner-py-file" title="Link to this heading"></a></h3>
 <p>The <code class="docutils literal notranslate"><span class="pre">Runner.py</span></code> file is the main file of the algorithm. This file should contain the algorithm implementation. The <code class="docutils literal notranslate"><span class="pre">Runner.py</span></code> file should be placed in the root directory of the algorithm.</p>
-<p>Because we specified the algorithm type as <code class="docutils literal notranslate"><span class="pre">Image2Image</span></code>, the <code class="docutils literal notranslate"><span class="pre">Runner.py</span></code> file should contain a class that inherits from the <code class="docutils literal notranslate"><span class="pre">Image2ImageRunner</span></code> class. The <code class="docutils literal notranslate"><span class="pre">Image2ImageRunner</span></code> class is located in the <code class="docutils literal notranslate"><span class="pre">t3d_server.algorithm_utils</span></code> module. The <code class="docutils literal notranslate"><span class="pre">Image2ImageRunner</span></code> class contains the necessary methods to handle the input and output of the algorithm.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">t3d_server.algorithm_utils.Image2ImageRunner</span><span class="w"> </span><span class="kn">import</span> <span class="n">Image2ImageRunner</span>
+<p>Because we specified the algorithm type as <code class="docutils literal notranslate"><span class="pre">Image2Image</span></code>, the <code class="docutils literal notranslate"><span class="pre">Runner.py</span></code> file should contain a class that inherits from the <code class="docutils literal notranslate"><span class="pre">Image2ImageRunner</span></code> class. The <code class="docutils literal notranslate"><span class="pre">Image2ImageRunner</span></code> class is located in the <code class="docutils literal notranslate"><span class="pre">compox.algorithm_utils</span></code> module. The <code class="docutils literal notranslate"><span class="pre">Image2ImageRunner</span></code> class contains the necessary methods to handle the input and output of the algorithm.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">compox.algorithm_utils.Image2ImageRunner</span><span class="w"> </span><span class="kn">import</span> <span class="n">Image2ImageRunner</span>
 
 <span class="k">class</span><span class="w"> </span><span class="nc">Runner</span><span class="p">(</span><span class="n">Image2ImageRunner</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
@@ -1387,7 +1387,7 @@
 
 </pre></div>
 </div>
-<p>To customize the behavior of fetching and processing the input data, and postprocessing and uploading the output data, we can implement the <code class="docutils literal notranslate"><span class="pre">preprocess</span></code> and <code class="docutils literal notranslate"><span class="pre">postprocess</span></code> methods. The <code class="docutils literal notranslate"><span class="pre">preprocess</span></code> method is called before the <code class="docutils literal notranslate"><span class="pre">inference</span></code> method and is used to fetch the input data. The <code class="docutils literal notranslate"><span class="pre">postprocess</span></code> method is called after the <code class="docutils literal notranslate"><span class="pre">inference</span></code> method and is used to process the output data. In our case, we will not implement any custom behavior for these methods. You can refer to the <code class="docutils literal notranslate"><span class="pre">t3d_server.algorithm_utils.Image2ImageRunner</span></code> class for more information about these methods.</p>
+<p>To customize the behavior of fetching and processing the input data, and postprocessing and uploading the output data, we can implement the <code class="docutils literal notranslate"><span class="pre">preprocess</span></code> and <code class="docutils literal notranslate"><span class="pre">postprocess</span></code> methods. The <code class="docutils literal notranslate"><span class="pre">preprocess</span></code> method is called before the <code class="docutils literal notranslate"><span class="pre">inference</span></code> method and is used to fetch the input data. The <code class="docutils literal notranslate"><span class="pre">postprocess</span></code> method is called after the <code class="docutils literal notranslate"><span class="pre">inference</span></code> method and is used to process the output data. In our case, we will not implement any custom behavior for these methods. You can refer to the <code class="docutils literal notranslate"><span class="pre">compox.algorithm_utils.Image2ImageRunner</span></code> class for more information about these methods.</p>
 </section>
 <section id="deploying-the-algorithm">
 <h3>Deploying the algorithm<a class="headerlink" href="#deploying-the-algorithm" title="Link to this heading"></a></h3>
@@ -1417,12 +1417,12 @@
 <span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;1.0.0&quot;</span>
 </pre></div>
 </div>
-<p>Next, we will fill out the [tool.t3dserver] section. This section contains the metadata that the t3dserver uses to deploy the algorithm as a service. <code class="docutils literal notranslate"><span class="pre">algorithm_type</span></code> defines the algorithm input and output types, you may either use some predefined algorithm types or define your own. The predefined algorithm types are located in <code class="docutils literal notranslate"><span class="pre">t3d_server.algorithm_utils</span></code>. For an image segmentation algorithm, we will use the the <code class="docutils literal notranslate"><span class="pre">Image2Segmentation</span></code> type. This type is suitable for image segmentation as the input is a sequence of images and the output is a sequence of segmentation masks.</p>
+<p>Next, we will fill out the [tool.t3dserver] section. This section contains the metadata that the t3dserver uses to deploy the algorithm as a service. <code class="docutils literal notranslate"><span class="pre">algorithm_type</span></code> defines the algorithm input and output types, you may either use some predefined algorithm types or define your own. The predefined algorithm types are located in <code class="docutils literal notranslate"><span class="pre">compox.algorithm_utils</span></code>. For an image segmentation algorithm, we will use the the <code class="docutils literal notranslate"><span class="pre">Image2Segmentation</span></code> type. This type is suitable for image segmentation as the input is a sequence of images and the output is a sequence of segmentation masks.</p>
 <div class="highlight-toml notranslate"><div class="highlight"><pre><span></span><span class="k">[tool.t3dserver]</span>
 <span class="n">algorithm_type</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;Image2Segmentation&quot;</span>
 </pre></div>
 </div>
-<p>Each algorithm type has a set of potential tags, which are used to specify the general algorithm functionality. These tags can be found and modified in the <code class="docutils literal notranslate"><span class="pre">t3d_server\algorithm_utils\algorithm_tags.yaml</span></code> file. Mutliple tags can be provided for one algorithm. For image segmentation algorithms, we will use the <code class="docutils literal notranslate"><span class="pre">image-segmentation</span></code> tag.</p>
+<p>Each algorithm type has a set of potential tags, which are used to specify the general algorithm functionality. These tags can be found and modified in the <code class="docutils literal notranslate"><span class="pre">compox\algorithm_utils\algorithm_tags.yaml</span></code> file. Mutliple tags can be provided for one algorithm. For image segmentation algorithms, we will use the <code class="docutils literal notranslate"><span class="pre">image-segmentation</span></code> tag.</p>
 <div class="highlight-toml notranslate"><div class="highlight"><pre><span></span><span class="n">tags</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;image-segmenation&quot;</span><span class="p">]</span>
 </pre></div>
 </div>
@@ -1501,9 +1501,9 @@
 <section id="the-runner-py-file">
 <h3>The Runner.py file<a class="headerlink" href="#the-runner-py-file" title="Link to this heading"></a></h3>
 <p>The <code class="docutils literal notranslate"><span class="pre">Runner.py</span></code> file is the main file of the algorithm. This file should contain the algorithm implementation. The <code class="docutils literal notranslate"><span class="pre">Runner.py</span></code> file should be placed in the root directory of the algorithm.</p>
-<p>Because we specified the algorithm type as <code class="docutils literal notranslate"><span class="pre">Image2Segmentation</span></code>, the <code class="docutils literal notranslate"><span class="pre">Runner.py</span></code> file should contain a class that inherits from the <code class="docutils literal notranslate"><span class="pre">Image2SegmentationRunner</span></code> class. The <code class="docutils literal notranslate"><span class="pre">Image2SegmentationRunner</span></code> class is located in the <code class="docutils literal notranslate"><span class="pre">t3d_server.algorithm_utils</span></code> module. The <code class="docutils literal notranslate"><span class="pre">Image2SegmentationRunner</span></code> class contains the necessary methods to handle the input and output of the algorithm.</p>
+<p>Because we specified the algorithm type as <code class="docutils literal notranslate"><span class="pre">Image2Segmentation</span></code>, the <code class="docutils literal notranslate"><span class="pre">Runner.py</span></code> file should contain a class that inherits from the <code class="docutils literal notranslate"><span class="pre">Image2SegmentationRunner</span></code> class. The <code class="docutils literal notranslate"><span class="pre">Image2SegmentationRunner</span></code> class is located in the <code class="docutils literal notranslate"><span class="pre">compox.algorithm_utils</span></code> module. The <code class="docutils literal notranslate"><span class="pre">Image2SegmentationRunner</span></code> class contains the necessary methods to handle the input and output of the algorithm.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">t3d_server.algorithm_utils.Image2SegmentationRunner</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">compox.algorithm_utils.Image2SegmentationRunner</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">Image2SegmentationRunner</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">image_segmentation.segmentation_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">threshold_image</span>
@@ -1568,7 +1568,7 @@ You can also report the progress of the algorithm by calling the <code class="do
     <span class="k">return</span> <span class="n">mask</span>
 </pre></div>
 </div>
-<p>To customize the behavior of fetching and processing the input data, and postprocessing and uploading the output data, we can implement the <code class="docutils literal notranslate"><span class="pre">preprocess</span></code> and <code class="docutils literal notranslate"><span class="pre">postprocess</span></code> methods. The <code class="docutils literal notranslate"><span class="pre">preprocess</span></code> method is called before the <code class="docutils literal notranslate"><span class="pre">inference</span></code> method and is used to fetch the input data. The <code class="docutils literal notranslate"><span class="pre">postprocess</span></code> method is called after the <code class="docutils literal notranslate"><span class="pre">inference</span></code> method and is used to process the output data. In our case, we will not implement any custom behavior for these methods. You can refer to the <code class="docutils literal notranslate"><span class="pre">t3d_server.algorithm_utils.Image2SegmentationRunner</span></code> class for more information about these methods.</p>
+<p>To customize the behavior of fetching and processing the input data, and postprocessing and uploading the output data, we can implement the <code class="docutils literal notranslate"><span class="pre">preprocess</span></code> and <code class="docutils literal notranslate"><span class="pre">postprocess</span></code> methods. The <code class="docutils literal notranslate"><span class="pre">preprocess</span></code> method is called before the <code class="docutils literal notranslate"><span class="pre">inference</span></code> method and is used to fetch the input data. The <code class="docutils literal notranslate"><span class="pre">postprocess</span></code> method is called after the <code class="docutils literal notranslate"><span class="pre">inference</span></code> method and is used to process the output data. In our case, we will not implement any custom behavior for these methods. You can refer to the <code class="docutils literal notranslate"><span class="pre">compox.algorithm_utils.Image2SegmentationRunner</span></code> class for more information about these methods.</p>
 </section>
 <section id="deploying-the-algorithm">
 <h3>Deploying the algorithm<a class="headerlink" href="#deploying-the-algorithm" title="Link to this heading"></a></h3>
@@ -1598,12 +1598,12 @@ You can also report the progress of the algorithm by calling the <code class="do
 <span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;1.0.0&quot;</span>
 </pre></div>
 </div>
-<p>Next, we will fill out the [tool.t3dserver] section. This section contains the metadata that the t3dserver uses to deploy the algorithm as a service. <code class="docutils literal notranslate"><span class="pre">algorithm_type</span></code> defines the algorithm input and output types, you may either use some predefined algorithm types or define your own. The predefined algorithm types are located in <code class="docutils literal notranslate"><span class="pre">t3d_server.algorithm_utils</span></code>. For an image registration algorithm, we will use the the <code class="docutils literal notranslate"><span class="pre">Image2Alignment</span></code> type. This type is suitable for image segmentation as the input is a sequence of images and the output is a sequence homography matrices.</p>
+<p>Next, we will fill out the [tool.t3dserver] section. This section contains the metadata that the t3dserver uses to deploy the algorithm as a service. <code class="docutils literal notranslate"><span class="pre">algorithm_type</span></code> defines the algorithm input and output types, you may either use some predefined algorithm types or define your own. The predefined algorithm types are located in <code class="docutils literal notranslate"><span class="pre">compox.algorithm_utils</span></code>. For an image registration algorithm, we will use the the <code class="docutils literal notranslate"><span class="pre">Image2Alignment</span></code> type. This type is suitable for image segmentation as the input is a sequence of images and the output is a sequence homography matrices.</p>
 <div class="highlight-toml notranslate"><div class="highlight"><pre><span></span><span class="k">[tool.t3dserver]</span>
 <span class="n">algorithm_type</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;Image2Alignment&quot;</span>
 </pre></div>
 </div>
-<p>Each algorithm type has a set of potential tags, which are used to specify the general algorithm functionality. These tags can be found and modified in the <code class="docutils literal notranslate"><span class="pre">t3d_server\algorithm_utils\algorithm_tags.yaml</span></code> file. Mutliple tags can be provided for one algorithm. For image registration algorithms, we will use the <code class="docutils literal notranslate"><span class="pre">image-alignment</span></code> tag.</p>
+<p>Each algorithm type has a set of potential tags, which are used to specify the general algorithm functionality. These tags can be found and modified in the <code class="docutils literal notranslate"><span class="pre">compox\algorithm_utils\algorithm_tags.yaml</span></code> file. Mutliple tags can be provided for one algorithm. For image registration algorithms, we will use the <code class="docutils literal notranslate"><span class="pre">image-alignment</span></code> tag.</p>
 <div class="highlight-toml notranslate"><div class="highlight"><pre><span></span><span class="n">tags</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;image-alignment&quot;</span><span class="p">]</span>
 </pre></div>
 </div>
@@ -1671,10 +1671,10 @@ You can also report the progress of the algorithm by calling the <code class="do
 <section id="the-runner-py-file">
 <h3>The Runner.py file<a class="headerlink" href="#the-runner-py-file" title="Link to this heading"></a></h3>
 <p>The <code class="docutils literal notranslate"><span class="pre">Runner.py</span></code> file is the main file of the algorithm. This file should contain the algorithm implementation. The <code class="docutils literal notranslate"><span class="pre">Runner.py</span></code> file should be placed in the root directory of the algorithm.</p>
-<p>Because we specified the algorithm type as <code class="docutils literal notranslate"><span class="pre">Image2Alignment</span></code>, the <code class="docutils literal notranslate"><span class="pre">Runner.py</span></code> file should contain a class that inherits from the <code class="docutils literal notranslate"><span class="pre">Image2AlignmentRunner</span></code> class. The <code class="docutils literal notranslate"><span class="pre">Image2AlignmentRunner</span></code> class is located in the <code class="docutils literal notranslate"><span class="pre">t3d_server.algorithm_utils</span></code> module. The <code class="docutils literal notranslate"><span class="pre">Image2AlignmentRunner</span></code> class contains the necessary methods to handle the input and output of the algorithm.</p>
+<p>Because we specified the algorithm type as <code class="docutils literal notranslate"><span class="pre">Image2Alignment</span></code>, the <code class="docutils literal notranslate"><span class="pre">Runner.py</span></code> file should contain a class that inherits from the <code class="docutils literal notranslate"><span class="pre">Image2AlignmentRunner</span></code> class. The <code class="docutils literal notranslate"><span class="pre">Image2AlignmentRunner</span></code> class is located in the <code class="docutils literal notranslate"><span class="pre">compox.algorithm_utils</span></code> module. The <code class="docutils literal notranslate"><span class="pre">Image2AlignmentRunner</span></code> class contains the necessary methods to handle the input and output of the algorithm.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">t3d_server.algorithm_utils.Image2AlignmentRunner</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">compox.algorithm_utils.Image2AlignmentRunner</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">Image2AlignmentRunner</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">image_registration.registration_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_random_translation</span>
@@ -1734,7 +1734,7 @@ You can also report the progress of the algorithm by calling the <code class="do
     <span class="k">return</span> <span class="n">matrices</span>
 </pre></div>
 </div>
-<p>To customize the behavior of fetching and processing the input data, and postprocessing and uploading the output data, we can implement the <code class="docutils literal notranslate"><span class="pre">preprocess</span></code> and <code class="docutils literal notranslate"><span class="pre">postprocess</span></code> methods. The <code class="docutils literal notranslate"><span class="pre">preprocess</span></code> method is called before the <code class="docutils literal notranslate"><span class="pre">inference</span></code> method and is used to fetch the input data. The <code class="docutils literal notranslate"><span class="pre">postprocess</span></code> method is called after the <code class="docutils literal notranslate"><span class="pre">inference</span></code> method and is used to process the output data. In our case, we will not implement any custom behavior for these methods. You can refer to the <code class="docutils literal notranslate"><span class="pre">t3d_server.algorithm_utils.Image2AlignmentRunner</span></code> class for more information about these methods.</p>
+<p>To customize the behavior of fetching and processing the input data, and postprocessing and uploading the output data, we can implement the <code class="docutils literal notranslate"><span class="pre">preprocess</span></code> and <code class="docutils literal notranslate"><span class="pre">postprocess</span></code> methods. The <code class="docutils literal notranslate"><span class="pre">preprocess</span></code> method is called before the <code class="docutils literal notranslate"><span class="pre">inference</span></code> method and is used to fetch the input data. The <code class="docutils literal notranslate"><span class="pre">postprocess</span></code> method is called after the <code class="docutils literal notranslate"><span class="pre">inference</span></code> method and is used to process the output data. In our case, we will not implement any custom behavior for these methods. You can refer to the <code class="docutils literal notranslate"><span class="pre">compox.algorithm_utils.Image2AlignmentRunner</span></code> class for more information about these methods.</p>
 </section>
 <section id="deploying-the-algorithm">
 <h3>Deploying the algorithm<a class="headerlink" href="#deploying-the-algorithm" title="Link to this heading"></a></h3>

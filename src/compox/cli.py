@@ -26,7 +26,7 @@ def run_server(
     config: str = None,
 ):
     """
-    Run the Compox with the specified configuration file. This command allows
+    Run compox with the specified configuration file. This command allows
     additional arguments to be passed to the server for its pydantic configuration.
 
     Parameters
@@ -112,7 +112,7 @@ def test(
     ),
 ):
     """
-    Run the Compox tests with the specified configuration file.
+    Run compox tests with the specified configuration file.
 
     Parameters
     ----------

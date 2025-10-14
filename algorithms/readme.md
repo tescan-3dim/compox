@@ -135,7 +135,7 @@ self.set_progress(0.5)
 ```
 
 ## The `pyproject.toml` file
-The `pyproject.toml` is a file that contains the algorithm metadata. This file is used by the compox to properly deploy the algorithm as a service. The `pyproject.toml` file should be placed in the root directory of the algorithm.
+The `pyproject.toml` is a file that contains the algorithm metadata. This file is used by compox to properly deploy the algorithm as a service. The `pyproject.toml` file should be placed in the root directory of the algorithm.
 
 ### Mandatory fields
 
@@ -147,7 +147,7 @@ name = "algorithm_name"
 version = "major.minor.patch"
 ```
 
-Even though the following fields are not mandatory, it is recommended to include them in the `pyproject.toml` file to make the algorithm as user-friendly and compatible with the compox as possible.
+Even though the following fields are not mandatory, it is recommended to include them in the `pyproject.toml` file to make the algorithm as user-friendly and compatible with compox as possible.
 
 The algorithm type should be specified in the `tool.compox` section. The algorithm type is used to specify the general algorithm functionality. The algorithm type is used to determine the input and output data schemas, and the general algorithm behavior. The algorithm type is defined in the compox.algorithm_utils module.
 
@@ -290,19 +290,19 @@ To define an user-adjustable `bool_list` parameter, use the following configurat
 
 ### Other fields
 
-The `check_importable` field is used to check if the algorithm can be imported. If set to `true`, the compox will check if the algorithm can be imported before deploying it as a service. (NOTE: THIS CURRENTLY DOES NOT WORK).
+The `check_importable` field is used to check if the algorithm can be imported. If set to `true`, compox will check if the algorithm can be imported before deploying it as a service. (NOTE: THIS CURRENTLY DOES NOT WORK).
 
 ```toml
 check_importable = false
 ```
 
-The `obfuscate` field is used to obfuscate the algorithm code. If set to `true`, the compox will obfuscate the algorithm code before deploying it as a service. The obfuscation is currently implemented as minimization of the code. It is recommended to set this field to `true` to reasonably protect the algorithm code.
+The `obfuscate` field is used to obfuscate the algorithm code. If set to `true`, compox will obfuscate the algorithm code before deploying it as a service. The obfuscation is currently implemented as minimization of the code. It is recommended to set this field to `true` to reasonably protect the algorithm code.
 
 ```toml
 obfuscate = true
 ```
 
-You can use the `hash_module` and `hash_assets` fields to check if the algorithm module or assets have already been deployed. If they have been deployed, the compox will not redeploy them, but reuse them for the current algorithm deployment. This can reduce the deployment time and the amount of data that needs to be stored.
+You can use the `hash_module` and `hash_assets` fields to check if the algorithm module or assets have already been deployed. If they have been deployed, compox will not redeploy them, but reuse them for the current algorithm deployment. This can reduce the deployment time and the amount of data that needs to be stored.
 
 ```toml
 hash_module = true

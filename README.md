@@ -145,7 +145,7 @@ gui:
 
 ## Server Execution and Tooling
 
-The Compox can be run using the `compox` command. This command is available in the virtual environment created during the setup process. Run the following command to list the available commands:
+Compox can be run using the `compox` command. This command is available in the virtual environment created during the setup process. Run the following command to list the available commands:
 
 ```bash
 compox --help
