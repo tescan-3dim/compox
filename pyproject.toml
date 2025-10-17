@@ -47,6 +47,7 @@ license-files = [
 [tool.pdm.version]
 source = "scm"
 tag_filter = "compox-v*"
+fallback_version = "0.0.0"
 
 [tool.uv]
 package = true
