@@ -6,7 +6,7 @@ All rights reserved
 import sys
 import os
 
-from compox.tasks.DebuggingTaskHandler import DebuggingTaskHandler
+from t3d_server.tasks.DebuggingTaskHandler import DebuggingTaskHandler
 
 
 if __name__ == "__main__":

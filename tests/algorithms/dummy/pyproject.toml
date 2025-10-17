@@ -2,7 +2,7 @@
 name = "dummy_algorithm"
 version = "1.0.0"
 
-[tool.compox]
+[tool.t3dserver]
 algorithm_type = "Image2Image"
 tags = ["image-denoising"]
 description = "Dummy algorithm for testing purposes."

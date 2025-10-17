@@ -15,26 +15,26 @@ import textwrap
 import h5py
 import numpy as np
 
-from compox.internal import downloader
-from compox.algorithm_utils.deployment_utils import (
+from t3d_server.internal import downloader
+from t3d_server.algorithm_utils.deployment_utils import (
     deploy_algorithm_from_folder,
     remove_algorithm_from_folder,
 )
-from compox.config.server_settings import get_server_settings
-from compox.components.api_builder import build_api
-from compox.components.server_builder import build_server
-from compox.tasks.TaskHandler import TaskHandler
+from t3d_server.config.server_settings import get_server_settings
+from t3d_server.components.api_builder import build_api
+from t3d_server.components.server_builder import build_server
+from t3d_server.tasks.TaskHandler import TaskHandler
 
 
 def pytest_addoption(parser):
     parser.addoption(
-        "--compox_config_path",
+        "--t3d_server_config_path",
         action="store",
         default=None,
         help="path to server configuration yaml file",
     )
     parser.addoption(
-        "--compox_url",
+        "--t3d_server_url",
         action="store",
         default=None,
         help="url of the server to run tests on",
@@ -47,20 +47,20 @@ def server_url(request):
 
     logger.remove()
 
-    compox_url = request.config.getoption("--compox_url")
-    compox_config = request.config.getoption("--compox_config_path")
+    t3d_server_url = request.config.getoption("--t3d_server_url")
+    t3d_server_config = request.config.getoption("--t3d_server_config_path")
     # check if only one of the two options is provided
 
-    if compox_url is not None and compox_config is None:
+    if t3d_server_url is not None and t3d_server_config is None:
 
         # normalize the url
-        if not compox_url.startswith("http"):
-            compox_url = "http://" + compox_url
-        if not compox_url.endswith("/"):
-            compox_url += "/"
-        yield compox_url
-    elif compox_url is None and compox_config is not None:
-        settings = get_server_settings(compox_config)
+        if not t3d_server_url.startswith("http"):
+            t3d_server_url = "http://" + t3d_server_url
+        if not t3d_server_url.endswith("/"):
+            t3d_server_url += "/"
+        yield t3d_server_url
+    elif t3d_server_url is None and t3d_server_config is not None:
+        settings = get_server_settings(t3d_server_config)
 
         # prepare storage
         if settings.storage.backend_settings.start_instance:
@@ -118,14 +118,14 @@ def server_url(request):
                 )
                 print(f"Deployed algorithm {folder_name}")
             yield server_url
-    elif compox_url is None and compox_config is None:
+    elif t3d_server_url is None and t3d_server_config is None:
         raise ValueError(
-            "You must provide one of the two options: --compox_url or --compox_config_path."
-            "Use --compox_url to run tests on an existing server or --compox_config_path to run tests a dynamically created server from a configuration file."
+            "You must provide one of the two options: --t3d_server_url or --t3d_server_config_path."
+            "Use --t3d_server_url to run tests on an existing server or --t3d_server_config_path to run tests a dynamically created server from a configuration file."
         )
     else:
         raise ValueError(
-            f"Invalid configuration: --compox_url: {compox_url}, --compox_config_path: {compox_config}"
+            f"Invalid configuration: --t3d_server_url: {t3d_server_url}, --t3d_server_config_path: {t3d_server_config}"
         )
 
 

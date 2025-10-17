@@ -2,7 +2,7 @@
 name = "template_registration_algorithm"
 version = "1.0.0"
 
-[tool.compox]
+[tool.t3dserver]
 algorithm_type = "Image2Alignment"
 tags = ["image-alignment"]
 description = "Performs a registration of a sequence of images."

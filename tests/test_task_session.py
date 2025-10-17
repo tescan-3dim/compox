@@ -6,7 +6,7 @@ All rights reserved
 import pytest
 from datetime import datetime, timedelta
 
-from compox.session.TaskSession import TaskSession
+from t3d_server.session.TaskSession import TaskSession
 
 
 @pytest.fixture

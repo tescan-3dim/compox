@@ -12,13 +12,13 @@ import os
 import functools
 import pytest
 
-import compox
-from compox.server_utils import (weak_lru, algorithm_cache, data_cache, check_and_create_database_collections, 
+import t3d_server
+from t3d_server.server_utils import (weak_lru, algorithm_cache, data_cache, check_and_create_database_collections, 
                                      get_subprocess_fn, ZipImporter, check_system_gpu_availability, check_mps_availability)
-import compox.server_utils
+import t3d_server.server_utils
 
 if os.name == "nt":
-    from compox.internal.JobPOpen import JobPOpen
+    from t3d_server.internal.JobPOpen import JobPOpen
 
 class Dummy:
     """
@@ -90,7 +90,7 @@ def test_check_cuda(monkeypatch):
     # 1, Torch=None + Cuda unavailable + Exception
         
     monkeypatch.setattr(importlib.util, 'find_spec', lambda name: None)
-    monkeypatch.setattr(compox.server_utils, 'get_subprocess_fn', lambda *args, **kwargs: dummy_subprocess_fn_factory(
+    monkeypatch.setattr(t3d_server.server_utils, 'get_subprocess_fn', lambda *args, **kwargs: dummy_subprocess_fn_factory(
         output="0, GPU0, 1024\n1, GPU1, 2048",
         error="",
         returncode=0,
@@ -102,7 +102,7 @@ def test_check_cuda(monkeypatch):
 
     # 2) Torch=None + Cuda unavailable + Check_output
     monkeypatch.setattr(importlib.util, 'find_spec', lambda name: None)
-    monkeypatch.setattr(compox.server_utils, 'get_subprocess_fn', lambda *args, **kwargs: dummy_subprocess_fn_factory(
+    monkeypatch.setattr(t3d_server.server_utils, 'get_subprocess_fn', lambda *args, **kwargs: dummy_subprocess_fn_factory(
         output="0, GPU0, 1024\n1, GPU1, 2048",
         error="",
         returncode=0,
@@ -114,7 +114,7 @@ def test_check_cuda(monkeypatch):
     
     # 3) Torch=True + Cuda unavailable + Check_output
     monkeypatch.setattr(importlib.util, "find_spec", lambda name: True)
-    monkeypatch.setattr(compox.server_utils, 'get_subprocess_fn', lambda *args, **kwargs: dummy_subprocess_fn_factory(
+    monkeypatch.setattr(t3d_server.server_utils, 'get_subprocess_fn', lambda *args, **kwargs: dummy_subprocess_fn_factory(
         output="0, GPU0, 1024\n1, GPU1, 2048\n2, GPU2, 4096",
         error="",
         returncode=0,
@@ -127,7 +127,7 @@ def test_check_cuda(monkeypatch):
     
     # 4) Torch=True + Cuda available
     monkeypatch.setattr(importlib.util, "find_spec", lambda name: True)
-    monkeypatch.setattr(compox.server_utils, 'get_subprocess_fn', lambda *args, **kwargs: dummy_subprocess_fn_factory(
+    monkeypatch.setattr(t3d_server.server_utils, 'get_subprocess_fn', lambda *args, **kwargs: dummy_subprocess_fn_factory(
         output="0, GPU0, 1024\n1, GPU1, 2048",
         error="",
         returncode=0,

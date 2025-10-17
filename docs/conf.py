@@ -6,14 +6,14 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = "compox"
+project = "t3dserver"
 copyright = "2024, TESCAN 3DIM, s.r.o."
 author = "Jan Matula"
 
 import os
 import sys
 
-sys.path.insert(0, os.path.abspath("../src/compox/"))
+sys.path.insert(0, os.path.abspath("../src/t3d_server/"))
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

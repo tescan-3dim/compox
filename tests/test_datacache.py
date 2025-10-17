@@ -5,7 +5,7 @@ All rights reserved
 
 import pytest
 
-from compox.session.DataCache import DataCache
+from t3d_server.session.DataCache import DataCache
 
 
 @pytest.fixture

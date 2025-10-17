@@ -1,10 +1,10 @@
 [build-system]
-requires = ["pdm-backend"]
-build-backend = "pdm.backend"
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
-name = "compox"
-dynamic = ["version"]
+name = "t3d-server"
+version = "1.0.18dev1"
 description = ""
 authors = [
 {name = "Jan Matula", email = "jan.matula@tescan.com"},
@@ -41,13 +41,8 @@ license = "Apache-2.0 AND LicenseRef-Commons-Clause-1.0"
 license-files = [
   "LICENSE",
   "NOTICE",
-  "THIRD_PARTY_LICENSES.txt"
+  "THIRD-PARTY-LICENSES*"
 ]
-
-[tool.pdm.version]
-source = "scm"
-tag_filter = "compox-v*"
-fallback_version = "0.0.0"
 
 [tool.uv]
 package = true
@@ -63,4 +58,4 @@ docs = [
 ]
 
 [project.scripts]
-compox = "compox.cli:app"
+t3d-server = "t3d_server.cli:app"

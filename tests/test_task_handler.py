@@ -12,8 +12,8 @@ import numpy as np
 import h5py
 from datetime import datetime
 
-from compox.tasks.TaskHandler import TaskHandler
-from compox.tasks.context_task_handler import current_task_handler
+from t3d_server.tasks.TaskHandler import TaskHandler
+from t3d_server.tasks.context_task_handler import current_task_handler
 
 
 class DummySchema(BaseModel):
@@ -271,7 +271,7 @@ def test_cached_fetch_algorithm_uses_cache(task_handler, mock_connection):
             instance._load_assets = MagicMock()
             return instance
 
-    with patch("compox.tasks.TaskHandler.ZipImporter") as mock_import:
+    with patch("t3d_server.tasks.TaskHandler.ZipImporter") as mock_import:
         dummy_mod = MagicMock()
         dummy_mod.Runner = DummyRunner
         mock_import.return_value.__enter__.return_value = dummy_mod
@@ -426,7 +426,7 @@ def test_post_data(task_handler, mock_connection):
     data2 = {"array1": np.array([-1, -2]), "array2": None}
 
     # Patch generate_uuid
-    with patch("compox.tasks.TaskHandler.generate_uuid") as mock_uuid:
+    with patch("t3d_server.tasks.TaskHandler.generate_uuid") as mock_uuid:
         mock_uuid.side_effect = ["id1", "id2"]
         out_ids = task_handler.post_data([data1, data2], DummySchema)
 
@@ -514,7 +514,7 @@ def test_post_data_validation_error(task_handler):
     data1 = {"array1": np.array([1, 2, 3]), "array2": "not an array"}
 
     # Patch generate_uuid
-    with patch("compox.tasks.TaskHandler.generate_uuid") as mock_uuid:
+    with patch("t3d_server.tasks.TaskHandler.generate_uuid") as mock_uuid:
         mock_uuid.side_effect = ["id1", "id2"]
         with pytest.raises(ValidationError):
             task_handler.post_data(data1, DummySchema)
@@ -636,7 +636,7 @@ def test_get_device_no_cuda(task_handler):
     Verify _get_device returns 'cpu' when CUDA unavailable.
     """
     with patch(
-        "compox.tasks.TaskHandler.check_system_gpu_availability",
+        "t3d_server.tasks.TaskHandler.check_system_gpu_availability",
         return_value=(False, None),
     ):
         algo = {"default_device": "gpu", "supported_devices": ["cpu", "gpu"]}
@@ -653,7 +653,7 @@ def test_get_device_cuda_available(task_handler):
     Verify _get_device returns 'cpu' when CUDA available.
     """
     with patch(
-        "compox.tasks.TaskHandler.check_system_gpu_availability",
+        "t3d_server.tasks.TaskHandler.check_system_gpu_availability",
         return_value=(True, None),
     ):
         algo = {"default_device": "gpu", "supported_devices": ["cpu", "gpu"]}
@@ -670,7 +670,7 @@ def test_get_device_respects_override(task_handler):
     Verify _get_device returns 'cpu' when CUDA available with override.
     """
     with patch(
-        "compox.tasks.TaskHandler.check_system_gpu_availability",
+        "t3d_server.tasks.TaskHandler.check_system_gpu_availability",
         return_value=(True, None),
     ):
         algo = {"default_device": "gpu", "supported_devices": ["cpu", "gpu"]}

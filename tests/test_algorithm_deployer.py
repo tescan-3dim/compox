@@ -10,7 +10,7 @@ from unittest.mock import call
 import hashlib
 import shutil
 
-from compox.algorithm_utils.AlgorithmDeployer import AlgorithmDeployer
+from t3d_server.algorithm_utils.AlgorithmDeployer import AlgorithmDeployer
 
 
 @pytest.fixture
@@ -34,7 +34,7 @@ def valid_alg_dir(tmp_path):
     directory.mkdir()
     content = {
         "project": {"name": "my_algo", "version": "1.2"},
-        "tool": {"compox": {
+        "tool": {"t3dserver": {
             "check_importable": False,
             "obfuscate": False,
             "hash_module": False,

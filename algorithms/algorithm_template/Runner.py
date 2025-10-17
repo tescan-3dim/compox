@@ -4,8 +4,8 @@ All rights reserved
 """
 
 import torch
-from compox.algorithm_utils.BaseRunner import BaseRunner
-import compox.algorithm_utils.io_schemas as schemas
+from t3d_server.algorithm_utils.BaseRunner import BaseRunner
+import t3d_server.algorithm_utils.io_schemas as schemas
 from dependencies.utils import my_function
 
 

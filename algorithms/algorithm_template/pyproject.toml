@@ -5,13 +5,13 @@ description = "PDM template for algorithms intended for deployment into T3D pyth
 authors = [
 ]
 dependencies = [
-    "python-computing-backend @ file:///${PROJECT_ROOT}/../../compox",
+    "python-computing-backend @ file:///${PROJECT_ROOT}/../../t3d_server",
 ]
 requires-python = "==3.10.*"
 readme = "README.md"
 license = {text = "MIT"}
 
-[tool.compox]
+[tool.t3dserver]
 # Whether to check if the module is importable by performing an import
 # test.
 check_importable = false

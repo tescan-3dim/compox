@@ -19,20 +19,20 @@ algorithm_name/
 
 ```
 ## The Runner.py file
-The Runner.py file is a mandatory component of the algorithm module. It serves as the entry point for the python computing backend to run the algorithm. It must define a class named Runner. The Runner class should inherit either from the BaseRunner class, or a Runner class specific to the algorithm type (see more in the algorithm types section). The Runner classes can be imported from the compox.algorithm_utils module. There are several mandatory methods that the Runner class must implement in order to work properly. The Runner class can also implement additional methods and functions that are not mandatory. But these can also be included as a submodule in the algorithm directory.
+The Runner.py file is a mandatory component of the algorithm module. It serves as the entry point for the python computing backend to run the algorithm. It must define a class named Runner. The Runner class should inherit either from the BaseRunner class, or a Runner class specific to the algorithm type (see more in the algorithm types section). The Runner classes can be imported from the t3d_server.algorithm_utils module. There are several mandatory methods that the Runner class must implement in order to work properly. The Runner class can also implement additional methods and functions that are not mandatory. But these can also be included as a submodule in the algorithm directory.
 
 ### Algorithm types
 There are several types of algorithms that can be implemented in the computing backend. The main difference between the algorithm types is in the way input and output data is handled. The algorihtm type is defined in the algorithm's `pyproject.toml` file and the class, from which the Runner class should inherit. An example of algorithm type is e.g. and Image2Image algorithm, which receives an image as input and returns an image as output. The pyproject.toml file should thus contain the following line:
     
 ```toml
-[tool.compox]
+[tool.t3dserver]
 algorithm_type = "Image2Image"
 ```
 
-Furthermore the algotihm's Runner class should inherit from the Image2ImageRunner class, which is imported from the compox.algorithm_utils module:
+Furthermore the algotihm's Runner class should inherit from the Image2ImageRunner class, which is imported from the t3d_server.algorithm_utils module:
 
 ```python
-from compox.algorithm_utils.Image2ImageRunner import Image2ImageRunner
+from t3d_server.algorithm_utils.Image2ImageRunner import Image2ImageRunner
 
 class Runner(Image2ImageRunner):
     """
@@ -46,10 +46,10 @@ The following algorithm types are currently supported:
 - Image2Segmentation: The algorithm receives an image as input and returns a segmentation mask as output.
 - Image2Alignment: The algorithm receives two images as input and returns an alignment transformation matrix as output.
 
-If the algorithm does not fit into any of the above categories, the Runner class can either inherit from the BaseRunner class, and the data schemas can be defined manually (more on that in the next section), or a new algorithm type can be defined in the compox.algorithm_utils module.
+If the algorithm does not fit into any of the above categories, the Runner class can either inherit from the BaseRunner class, and the data schemas can be defined manually (more on that in the next section), or a new algorithm type can be defined in the t3d_server.algorithm_utils module.
 
 ### Algorithm tags
-The algorithm tags are a useful tool to categorize the algorithms for the users in the frontend application. Each algorithm type has a set of predefined tags, which are used to categorize the algorithms. This is important, because when several algorithms are tagged by a specific tag, the frontend developer can then operate with the assumption, that the algorithms with the same tag have the same input and output data schemas. The tags are defined in the `compox/src/compox/algorithm_utils/algorithm_tags.yaml` file. This file can be edited by the developer to add new tags or modify the existing ones.
+The algorithm tags are a useful tool to categorize the algorithms for the users in the frontend application. Each algorithm type has a set of predefined tags, which are used to categorize the algorithms. This is important, because when several algorithms are tagged by a specific tag, the frontend developer can then operate with the assumption, that the algorithms with the same tag have the same input and output data schemas. The tags are defined in the `t3d_server/src/t3d_server/algorithm_utils/algorithm_tags.yaml` file. This file can be edited by the developer to add new tags or modify the existing ones.
 
 ### The `preprocess`, `inference` and `postprocess` methods
 The methods are `preprocess`, `inference` and `postprocess`. In general it does not matter which part of the algorithm is implemented in which method, because the run method will call them sequentially in the order they are listed above. The separation is mostly for readability and maintainability.
@@ -135,7 +135,7 @@ self.set_progress(0.5)
 ```
 
 ## The `pyproject.toml` file
-The `pyproject.toml` is a file that contains the algorithm metadata. This file is used by compox to properly deploy the algorithm as a service. The `pyproject.toml` file should be placed in the root directory of the algorithm.
+The `pyproject.toml` is a file that contains the algorithm metadata. This file is used by the t3dserver to properly deploy the algorithm as a service. The `pyproject.toml` file should be placed in the root directory of the algorithm.
 
 ### Mandatory fields
 
@@ -147,18 +147,18 @@ name = "algorithm_name"
 version = "major.minor.patch"
 ```
 
-Even though the following fields are not mandatory, it is recommended to include them in the `pyproject.toml` file to make the algorithm as user-friendly and compatible with compox as possible.
+Even though the following fields are not mandatory, it is recommended to include them in the `pyproject.toml` file to make the algorithm as user-friendly and compatible with the t3dserver as possible.
 
-The algorithm type should be specified in the `tool.compox` section. The algorithm type is used to specify the general algorithm functionality. The algorithm type is used to determine the input and output data schemas, and the general algorithm behavior. The algorithm type is defined in the compox.algorithm_utils module.
+The algorithm type should be specified in the `tool.t3dserver` section. The algorithm type is used to specify the general algorithm functionality. The algorithm type is used to determine the input and output data schemas, and the general algorithm behavior. The algorithm type is defined in the t3d_server.algorithm_utils module.
 
 ### Algorithm type, tags, and description
 
 ```toml
-[tool.compox]
+[tool.t3dserver]
 algorithm_type = "AlgorithmType"
 ```
 
-Each algorithm type has a set of potential tags, which are used to specify the general algorithm functionality. These tags can be found and modified in the `compox\algorithm_utils\algorithm_tags.yaml` file. Multiple tags can be provided for one algorithm. For image denoising algorithms, we will use the `image-denoising` tag. 
+Each algorithm type has a set of potential tags, which are used to specify the general algorithm functionality. These tags can be found and modified in the `t3d_server\algorithm_utils\algorithm_tags.yaml` file. Multiple tags can be provided for one algorithm. For image denoising algorithms, we will use the `image-denoising` tag. 
  
 ```toml
 tags = ["tag1", "tag2", "tag3", ...]
@@ -290,19 +290,19 @@ To define an user-adjustable `bool_list` parameter, use the following configurat
 
 ### Other fields
 
-The `check_importable` field is used to check if the algorithm can be imported. If set to `true`, compox will check if the algorithm can be imported before deploying it as a service. (NOTE: THIS CURRENTLY DOES NOT WORK).
+The `check_importable` field is used to check if the algorithm can be imported. If set to `true`, the t3dserver will check if the algorithm can be imported before deploying it as a service. (NOTE: THIS CURRENTLY DOES NOT WORK).
 
 ```toml
 check_importable = false
 ```
 
-The `obfuscate` field is used to obfuscate the algorithm code. If set to `true`, compox will obfuscate the algorithm code before deploying it as a service. The obfuscation is currently implemented as minimization of the code. It is recommended to set this field to `true` to reasonably protect the algorithm code.
+The `obfuscate` field is used to obfuscate the algorithm code. If set to `true`, the t3dserver will obfuscate the algorithm code before deploying it as a service. The obfuscation is currently implemented as minimization of the code. It is recommended to set this field to `true` to reasonably protect the algorithm code.
 
 ```toml
 obfuscate = true
 ```
 
-You can use the `hash_module` and `hash_assets` fields to check if the algorithm module or assets have already been deployed. If they have been deployed, compox will not redeploy them, but reuse them for the current algorithm deployment. This can reduce the deployment time and the amount of data that needs to be stored.
+You can use the `hash_module` and `hash_assets` fields to check if the algorithm module or assets have already been deployed. If they have been deployed, the t3dserver will not redeploy them, but reuse them for the current algorithm deployment. This can reduce the deployment time and the amount of data that needs to be stored.
 
 ```toml
 hash_module = true
@@ -437,7 +437,7 @@ The pyproject.toml file should look like this:
 name = "foo"
 version = "0.1.0"
 
-[tool.compox]
+[tool.t3dserver]
 algorithm_type = "Generic"
 tags = ["foo", "bar"]
 description = "This algorithm does foo and bar."
