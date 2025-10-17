@@ -1,10 +1,9 @@
-# T3D server
-T3D server is a simple Python REST API execution engine with a MinIO storage backend. It allows storing data, deploying algorithms, submitting execution requests and retrieving the results. It can be used to extend functionality of Tescan 3D software suite (e.g. 3D Viewer, Picannto)
-
+# Compox
+Compox is a simple Python execution engine based on FastAPI with a MinIO object storage and Celery task queue. The app is designed to run algorithms written in Python on the server and report the results to the user.
 ## Installation
-T3D server can be installed through PyPI: 
+Compox can be installed through PyPI: 
 ```bash
-pip install t3d-server
+pip install compox
 ```
 
 You can also install the server by cloning this repository and installing it from source.
@@ -12,36 +11,38 @@ You can also install the server by cloning this repository and installing it fro
 Note that some additional dependencies, such as MinIO executable for your operating system, will be downloaded on the first run of the server.
 
 ## Running the server
-Once installed into your Python environment, it's recommended to generate an initial configuration file with `t3d-server generate-config`. 
+Once installed into your Python environment, it's recommended to generate an initial configuration file with `compox generate-config`. 
 To see the available options for the `generate-config` command, you can run:
 
 ```bash
-t3d-server generate-config --help
+compox generate-config --help
 ```
 
-The T3D server can be run using the `t3d-server` command. This command is available in the virtual environment created during the setup process. Run the following command to list the available commands:
+The Compox can be run using the `compox` command. This command is available in the virtual environment created during the setup process. Run the following command to list the available commands:
 
 ```bash
-t3d-server --help
+compox --help
 ```
 
-To run the T3D server, use the following command:
+To run the Compox, use the following command:
 
 ```bash
-t3d-server run --config /path/to/config.yaml
+compox run --config /path/to/config.yaml
 ```
 
-### Deploy algorithms
-See the T3D server algorithm development tutorial [TBD]. Once your algorithm is ready, you can use the `t3d-server deploy-algorithms` command to deploy it to your server. This command will read the algorithm definitions from the specified configuration file and deploy them to the server. For example:
+### Deploying algorithms
+A future release of this package will include a detailed tutorial on how to prepare a data processing algorithm for T3D applications. 
+
+Once your algorithm is ready, you can use the `compox deploy-algorithms` command to deploy it to your server. This command will read the algorithm definitions from the specified configuration file and deploy them to the server. For example:
 
 ```bash
-t3d-server deploy-algorithms --config /path/to/config.yaml
+compox deploy-algorithms --config /path/to/config.yaml
 ```
 
 To see the available options for the `deploy-algorithms` command, you can run:
 
 ```bash
-t3d-server deploy-algorithms --help
+compox deploy-algorithms --help
 ```
 
 ## Configuration
@@ -57,23 +58,23 @@ The server uses pydantic settings for configuration. The configuration can be ei
 
 <br>
 
-### T3D Server Configuration Reference
+### Compox Configuration Reference
 
 | Section                         | Field                      | Default                            | Description                                                                 |
 |----------------------------------|-----------------------------|------------------------------------|-----------------------------------------------------------------------------|
 |                                  | `port`                    | `5461`                             | The main server port used to make requests                                 |
 |                                  | `deploy_algorithms_from`  | `"./algorithms"`                   | Directory for algorithm deployment sources.                                |
-|                                  | `log_path`                | `"LOG_DEFAULT:t3d_server.log"`     | Path to the main log file (supports dynamic prefixes).                     |
+|                                  | `log_path`                | `"LOG_DEFAULT:compox.log"`     | Path to the main log file (supports dynamic prefixes).                     |
 |                                  | `config`                  | `None`                             | Optional config path override.                                             |
 | `info`                           | `product_name`              | `"TESCAN 3D Backend"`              | Product display name.                                                      |
-| `info`                           | `server_tags`               | `[]` → auto appends `"t3d_server"` | Tags attached to the server. `"t3d_server"` is added automatically.        |
+| `info`                           | `server_tags`               | `[]` → auto appends `"compox"` | Tags attached to the server. `"compox"` is added automatically.        |
 | `info`                           | `group_name`                | `"TESCAN GROUP, a.s."`             | Name of the corporate group.                                               |
 | `info`                           | `organization_name`         | `"TESCAN 3DIM, s.r.o."`            | Full name of the organization.                                             |
 | `info`                           | `organization_domain`       | `"tescan3dim.com"`                 | Domain used in server configuration.                                       |
 | `info`                           | `version`                   | `"0.1"`                            | Semantic version of the server release.                                   |
 | `gui`                            | `algorithm_add_remove_in_menus` | `False`                        | Enables/disables GUI menu for algorithm management.                        |
 | `gui`                            | `use_systray`               | `False`                            | Enables/disables systray GUI integration.                                  |
-| `gui`                            | `icon_path`                 | `"../t3d_server/resources/t3dbackend.ico"` | Path to the systray icon (supports dynamic prefixes)               |
+| `gui`                            | `icon_path`                 | `"../compox/resources/compoxbackend.ico"` | Path to the systray icon (supports dynamic prefixes)               |
 | `storage`                        | `collection_prefix`         | `""`                               | Prefix applied to object store collections. (useful for AWS s3 store, where unique bucket names are needed)|
 | `storage`                        | `data_store_expire_days`    | `1`                                | Number of days until stored datasets expire.                               |
 | `storage`                        | `access_key_id`             | `UUIDv4`                           | Generated access key for storage backend. If `null` is provided, random UUIDv4 is generated. |
@@ -83,7 +84,7 @@ The server uses pydantic settings for configuration. The configuration can be ei
 | `storage.backend_settings` (minio) | `port`                   | `9091`                             | MinIO service port.                                                        |
 | `storage.backend_settings` (minio) | `console_port`           | `9090`                             | MinIO admin console port.                                                  |
 | `storage.backend_settings` (minio) | `executable_path`        | `"minio/minio_bin"`                | Path to the MinIO binary (accepts dynamic prefixes).                |
-| `storage.backend_settings` (minio) | `storage_path`           | `"minio/t3d_server_store"`         | Storage directory used by MinIO (accepts dynamic prefixes).         |
+| `storage.backend_settings` (minio) | `storage_path`           | `"minio/compox_store"`         | Storage directory used by MinIO (accepts dynamic prefixes).         |
 | `storage.backend_settings` (minio) | `aws_region`             | `None`                             | Optional AWS compatibility region.                                         |
 | `storage.backend_settings` (minio) | `s3_domain_name`         | `None`                             | Optional domain override for S3 compatibility.                             |
 | `storage.backend_settings` (minio) | `s3_endpoint_url`        | Derived from `port`                | Computed as `http://localhost:{port}`.                                     |
@@ -96,7 +97,7 @@ The server uses pydantic settings for configuration. The configuration can be ei
 | `inference.backend_settings` (fastapi) | `executor`           | `"fastapi_background_tasks"`       | Task executor type.                                                        |
 | `inference.backend_settings` (fastapi) | `worker_number`       | `1`                                | Number of worker threads for FastAPI tasks.                                |
 | `inference.backend_settings` (celery) | `executor`            | `"celery"`                         | Task executor type.                                                        |
-| `inference.backend_settings` (celery) | `worker_name`         | `"t3d_worker"`                     | Name of the Celery worker.                                                 |
+| `inference.backend_settings` (celery) | `worker_name`         | `"compox_worker"`                     | Name of the Celery worker.                                                 |
 | `inference.backend_settings` (celery) | `broker_url`          | **Required**                       | URL of the message broker (e.g. `amqp://`, `redis://`).                    |
 | `inference.backend_settings` (celery) | `result_backend`      | `"rpc://"`                         | Backend used to store task results.                                        |
 | `inference.backend_settings` (celery) | `run_flower`          | `False`                            | Whether to start a Flower dashboard.                                       |
@@ -112,7 +113,7 @@ The server uses pydantic settings for configuration. The configuration can be ei
 | `middleware`                       | `max_age`                 | `3600`                             | Cache time (in seconds) for CORS preflight.                                |
 
 
-Some fields in the T3D Server configuration (such as `log_path`, `icon_path`, `ssl_keyfile`, etc.) support **dynamic prefixes** that resolve to OS-specific or runtime-specific paths. This allows for portability across platforms (e.g., Windows, Linux) and between development and production environments.
+Some fields in the Compox configuration (such as `log_path`, `icon_path`, `ssl_keyfile`, etc.) support **dynamic prefixes** that resolve to OS-specific or runtime-specific paths. This allows for portability across platforms (e.g., Windows, Linux) and between development and production environments.
 
 #### Supported Prefixes
 
@@ -133,7 +134,7 @@ Some fields in the T3D Server configuration (such as `log_path`, `icon_path`, `s
 #### Example
 
 ```yaml
-log_path: "LOG_DEFAULT:t3d_server.log"
+log_path: "LOG_DEFAULT:compox.log"
 ssl:
   use_ssl: true
   ssl_keyfile: "PROGRAMDATA_DEFAULT:ssl/server.key"
@@ -142,5 +143,101 @@ gui:
   icon_path: "RELATIVE_DEFAULT:resources/icon.ico"
 ```
 
-</details>
+## Server Execution and Tooling
 
+Compox can be run using the `compox` command. This command is available in the virtual environment created during the setup process. Run the following command to list the available commands:
+
+```bash
+compox --help
+```
+
+### Running the Server
+To run the Compox, use the following command:
+
+```bash
+compox run --config config.yaml
+```
+
+Replace `config.yaml` with the path to your configuration file. The server will start and listen on the port specified in the configuration.
+You can also specify the configuration file directly in the command line, which will override the default configs and the configuarion field in the config file. Nested configuration fields can be specified using dot notation. For example, to set the executor to `celery` and the worker name to `my_worker`, you can run:
+
+```bash
+compox run --config config.yaml --inference.backend_settings.executor celery --inference.backend_settings.worker_name my_worker
+```
+
+To see the available options for the `run` command, you can run:
+
+```bash
+compox run --help
+```
+
+### Worker spawning (for Celery)
+To spawn a Celery worker, you can use the `compox spawn-worker` command. This command will start a Celery worker with the specified configuration. You can specify the worker name and other settings as needed. For example:
+
+```bash
+compox spawn-worker --config config.yaml --inference.backend_settings.worker_name my_worker
+```
+
+To see the available options for the `spawn-worker` command, you can run:
+
+```bash
+compox spawn-worker --help
+```
+
+### Running tests
+To run the tests, you can use the `compox test` command. This command will run the tests defined in the `tests` directory. You should provide the path to the folder containing the tests (`--test-path`), which is `tests` by default. You can either provide a path to a specific configuration file (`--config`), which will spawn a server instance and run the tests against it, or you can run the tests against a running server instance by providing the `--server-url` argument. For example:
+
+```bash
+compox test --test-path tests --config config.yaml
+```
+
+To see the available options for the `test` command, you can run:
+
+```bash
+compox test --help
+```
+
+### Deploy algorithms
+To deploy algorithms to the server, you can use the `compox deploy-algorithms` command. This command will read the algorithm definitions from the specified configuration file and deploy them to the server. For example:
+
+```bash
+compox deploy-algorithms --config app_server.yaml
+```
+
+To see the available options for the `deploy-algorithms` command, you can run:
+
+```bash
+compox deploy-algorithms --help
+```
+
+### Generate configuration
+If you don't have a configuration file, you can generate a default configuration file using the `compox generate-config` command. This command will create a default configuration file in the specified path. You can also override the default fields in the configuration file by providing them as command line arguments. You will be prompted if you try to generate a configuration file that already exists. For example:
+
+```bash
+compox generate-config --path app_server.yaml --port 8888 --gui.use_systray True
+```
+
+To see the available options for the `generate-config` command, you can run:
+
+```bash
+compox generate-config --help
+```
+
+### Serving documentation
+You can update documentation by navigating to the `python-computing-backend/compox/docs` directory and running the following command:
+
+```bash
+make.bat html
+```
+
+This will generate the documentation in the `_build/html` directory. After the documentation is built, you can serve it using the `compox serve-docs` command. This command will start a simple HTTP server to serve the documentation files. You can specify the directory where the documentation is located and the port on which to serve it. For example:
+
+```
+compox serve-docs --directory docs/_build/html --port 8000
+```
+
+To see the available options for the `serve-docs` command, you can run:
+
+```bash
+compox serve-docs --help
+```

@@ -3,8 +3,8 @@ Copyright 2024 TESCAN 3DIM, s.r.o.
 All rights reserved
 """
 
-from t3d_server.algorithm_utils.BaseRunner import BaseRunner
-from t3d_server.algorithm_utils.io_schemas import ImageSchema
+from compox.algorithm_utils.BaseRunner import BaseRunner
+from compox.algorithm_utils.io_schemas import ImageSchema
 from dependencies.utils import my_function
 
 

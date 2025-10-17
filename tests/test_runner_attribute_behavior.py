@@ -8,8 +8,8 @@ import numpy as np
 import types
 from concurrent.futures import ThreadPoolExecutor
 
-from t3d_server.algorithm_utils.Image2ImageRunner import Image2ImageRunner
-from t3d_server.tasks.DebuggingTaskHandler import DebuggingTaskHandler
+from compox.algorithm_utils.Image2ImageRunner import Image2ImageRunner
+from compox.tasks.DebuggingTaskHandler import DebuggingTaskHandler
 
 
 class AttributeSafetyRunner(Image2ImageRunner):

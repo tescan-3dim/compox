@@ -1,25 +1,30 @@
-name: T3D Server tests
+name: Compox tests
 
-on: workflow_dispatch
+on:
+  push:
+      branches: 
+      - main
+      - staging
+  workflow_dispatch:
 
 jobs:
   test:
     runs-on: ubuntu-latest
-
+    container:
+      image: ghcr.io/astral-sh/uv:0.5-python3.12-bookworm-slim
     steps:
+      - name: Set up dependencies
+        run: |
+          apt-get update && apt-get install -y build-essential pkg-config
+
       - name: Checkout code
         uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.10'
-
-      - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install .
+          uv python install 3.10 3.11 3.12 3.13
+          uv tool install tox
 
       - name: Run pytest
         run: |
-          pytest --cov=src --cov-report=term-missing tests --t3d_server_config_path=tests/test_server.yaml
+          uvx tox

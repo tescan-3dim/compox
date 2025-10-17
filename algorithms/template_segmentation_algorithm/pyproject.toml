@@ -2,7 +2,7 @@
 name = "template_segmentation_algorithm"
 version = "1.0.0"
 
-[tool.t3dserver]
+[tool.compox]
 algorithm_type = "Image2Segmentation"
 tags = ["image-segmentation"]
 description = "Performs a binary segmentation of a 3-D image using a skimage filter."

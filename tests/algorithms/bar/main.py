@@ -8,7 +8,7 @@ import os
 
 sys.path.insert(0, "fastapi/app")
 
-from t3d_server.tasks.DebuggingTaskHandler import DebuggingTaskHandler
+from compox.tasks.DebuggingTaskHandler import DebuggingTaskHandler
 
 
 if __name__ == "__main__":

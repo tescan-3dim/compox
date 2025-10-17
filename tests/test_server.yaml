@@ -6,12 +6,11 @@ info:
   group_name: "TESCAN GROUP, a.s."
   organization_name: "TESCAN 3DIM, s.r.o."
   organization_domain: "tescan3dim.com"
-  version: "0.1"
 
 gui:
   algorithm_add_remove_in_menus: true
   use_systray: false
-  icon_path: "resources/t3dbackend.ico"
+  icon_path: "resources/compoxbackend.ico"
 
 storage:
   data_store_expire_days: 1
@@ -21,7 +20,7 @@ storage:
     port: 9091
     console_port: 9090
     executable_path: "minio/TESCAN3DBackendDB.exe"
-    storage_path: "minio/t3d_server_store"
+    storage_path: "minio/compox_store"
 
 inference:
   device: "cuda"

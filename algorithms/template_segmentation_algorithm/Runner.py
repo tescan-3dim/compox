@@ -4,7 +4,7 @@ All rights reserved
 """
 
 import numpy as np
-from t3d_server.algorithm_utils.Image2SegmentationRunner import (
+from compox.algorithm_utils.Image2SegmentationRunner import (
     Image2SegmentationRunner,
 )
 from image_segmentation.segmentation_utils import threshold_image

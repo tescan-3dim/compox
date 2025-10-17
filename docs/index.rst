@@ -1,4 +1,4 @@
-Welcome to the t3dserver documentation!
+Welcome to the Compox documentation!
 ====================================================
 
 .. include:: ../README.md
