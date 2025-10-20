@@ -1,6 +1,6 @@
 # How to create an algorithm module
 
-In the following sections, we will describe how to create an algorithm module for the computing backend. The algorithm module is a Python package that contains the algorithm code. The algorithm module should be structured in a specific way in order to work properly with the computing backend.
+In the following sections, we will describe how to create an algorithm module for Compox. The algorithm module is a Python package that contains the algorithm code and assets. The algorithm module should be structured in a specific way in order to work properly with Compox.
 
 The algorithm should be structured as follows:
 
@@ -19,10 +19,10 @@ algorithm_name/
 
 ```
 ## The Runner.py file
-The Runner.py file is a mandatory component of the algorithm module. It serves as the entry point for the python computing backend to run the algorithm. It must define a class named Runner. The Runner class should inherit either from the BaseRunner class, or a Runner class specific to the algorithm type (see more in the algorithm types section). The Runner classes can be imported from the compox.algorithm_utils module. There are several mandatory methods that the Runner class must implement in order to work properly. The Runner class can also implement additional methods and functions that are not mandatory. But these can also be included as a submodule in the algorithm directory.
+The Runner.py file is a mandatory component of the algorithm module. It serves as the entry point for Compox to run the algorithm. It must define a class named Runner. The Runner class should inherit either from the BaseRunner class, or a Runner class specific to the algorithm type (see more in the algorithm types section). The Runner classes can be imported from the compox.algorithm_utils module. There are several mandatory methods that the Runner class must implement in order to work properly. The Runner class can also implement additional methods and functions that are not mandatory. But these can also be included as a submodule in the algorithm directory.
 
 ### Algorithm types
-There are several types of algorithms that can be implemented in the computing backend. The main difference between the algorithm types is in the way input and output data is handled. The algorihtm type is defined in the algorithm's `pyproject.toml` file and the class, from which the Runner class should inherit. An example of algorithm type is e.g. and Image2Image algorithm, which receives an image as input and returns an image as output. The pyproject.toml file should thus contain the following line:
+There are several types of algorithms that can be implemented in Compox. The main difference between the algorithm types is in the way input and output data is handled. The algorihtm type is defined in the algorithm's `pyproject.toml` file and the class, from which the Runner class should inherit. An example of algorithm type is e.g. and Image2Image algorithm, which receives an image as input and returns an image as output. The pyproject.toml file should thus contain the following line:
     
 ```toml
 [tool.compox]
@@ -108,7 +108,7 @@ output_dataset_ids = self.post_data(output)
 
 
 ### The `load_assets` method
-Is expected that the Runner class will work with a machine learning model. Because loading of model weights can be time consuming, the BaseRunner gives the developer an option to implement the `load_assets` method. The `load_assets` method is called during the instantiation of the Runner class in the computing backend and the attributes set in the `load_assets` will get cached together with the Runner instance. This will make repeated calls to the Runner class faster, because the model weights will not have to be loaded again as long as the cache is not invalidated.
+It is expected that the Runner class will work with a machine learning model. Because loading of model weights can be time consuming, the BaseRunner gives the developer an option to implement the `load_assets` method. The `load_assets` method is called during the instantiation of the Runner class in the Compox process and the attributes set in the `load_assets` will get cached together with the Runner instance. This will make repeated calls to the Runner class faster, because the model weights will not have to be loaded again as long as the cache is not invalidated.
 
 Any file present in the algorithm directory can be loaded in the `load_assets` method (other than .py files). The `load_assets` should receive a relative path to the file that should be loaded as an argument. A bytes object will be returned, which can be loaded e.g. using the the torch.load method in the case of PyTorch state dicts.
 
@@ -119,7 +119,7 @@ state_dict = torch.load(state_dict)
 ```
 
 ### The `log_message` method
-The log_message method can be used to log messages to the computing backend. The log_message method receives a message and a logging level as arguments. The logging level can be one of the following: "DEBUG", "INFO", "WARNING", "ERROR". The default logging level is "INFO".
+The log_message method can be used to log messages to Compox. The log_message method receives a message and a logging level as arguments. The logging level can be one of the following: "DEBUG", "INFO", "WARNING", "ERROR". The default logging level is "INFO".
 
 Example of logging a message:
 ```python
@@ -127,7 +127,7 @@ self.log_message("This is an info message.", logging_level="INFO")
 ```
 
 ### The `set_progress` method
-The set_progress method can be used to report the progress of the algorithm to the computing backend. The set_progress method receives a float value between 0 and 1 as an argument. The starting progress is automatically set to 0 and if the computation is done, or fails, the progress is automatically set to 1.
+The set_progress method can be used to report the progress of the algorithm to Compox. The set_progress method receives a float value between 0 and 1 as an argument. The starting progress is automatically set to 0 and if the computation is done, or fails, the progress is automatically set to 1.
 
 Example of reporting the progress:
 ```python

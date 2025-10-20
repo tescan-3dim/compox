@@ -7,7 +7,7 @@ Welcome to the Compox documentation!
 Algorithms
 ====================================================
 
-.. include:: ../algorithms/readme.md
+.. include:: ../algorithms/README.md
     :parser: myst_parser.sphinx_
 .. include:: ../algorithms/template_denoising_algorithm/README.md
     :parser: myst_parser.sphinx_
