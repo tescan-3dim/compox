@@ -3,11 +3,13 @@ Copyright 2024 TESCAN 3DIM, s.r.o.
 All rights reserved
 """
 
+import importlib.metadata
 from fastapi import APIRouter, Request
 from typing import Union
 
 from compox.pydantic_models import RootMessage, ResponseMessage
 from compox.server_utils import check_system_gpu_availability
+import compox
 
 router = APIRouter(prefix="", tags=["root"])
 
@@ -44,8 +46,8 @@ def read_root(request: Request) -> Union[RootMessage, ResponseMessage]:
         group = settings.info.group_name
         organization = settings.info.organization_name
         domain = settings.info.organization_domain
-        version = settings.info.version
-
+        
+        version = importlib.metadata.version('compox')
         cuda_available, cuda_capable_device_count = (
             check_system_gpu_availability()
         )

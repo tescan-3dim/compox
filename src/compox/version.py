@@ -4,4 +4,4 @@ def format_version(version: SCMVersion) -> str:
     if version.distance is None:
         return str(version.version)
     else:
-        return f"{version.version}+{version.node[:8]}"
+        return f"{version.version}+{version.node[1:9]}"
