@@ -1,4 +1,4 @@
-# A general template for creating a segmentation algorithm
+# Registration algorithm template
 
 Here a working template for developing an image registration algorithm will be presented. To see how compox algorithm should generally be structured, please refer to the algorithms/readme.md file.
 
@@ -54,7 +54,7 @@ Here we will add a `max_translation` parameter that defines the maximum translat
  {name = "max_translation", description = "Maximum translation as a fraction of the image size.", config = {type = "float_range", default = 0.25, min = 0.0, max = 1.0, step = 0.05, adjustable = true}}
 ```
 
-The `check_importable` field is used to check if the algorithm can be imported. If set to `true`, compox will check if the algorithm can be imported before deploying it as a service. (NOTE: THIS CURRENTLY DOES NOT WORK).
+The `check_importable` field is used to check if the algorithm can be imported. If set to `true`, compox will check if the algorithm can be imported before deploying it as a service.
 
 ```toml
 check_importable = false

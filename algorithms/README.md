@@ -1,6 +1,5 @@
 # How to create an algorithm module
-
-In the following sections, we will describe how to create an algorithm module for Compox. The algorithm module is a Python package that contains the algorithm code and assets. The algorithm module should be structured in a specific way in order to work properly with Compox.
+The algorithm module is a Python package that contains the algorithm code and assets. The algorithm module should be structured in a specific way in order to work properly with Compox.
 
 The algorithm should be structured as follows:
 
@@ -290,7 +289,7 @@ To define an user-adjustable `bool_list` parameter, use the following configurat
 
 ### Other fields
 
-The `check_importable` field is used to check if the algorithm can be imported. If set to `true`, compox will check if the algorithm can be imported before deploying it as a service. (NOTE: THIS CURRENTLY DOES NOT WORK).
+The `check_importable` field is used to check if the algorithm can be imported. If set to `true`, compox will check if the algorithm can be imported before deploying it as a service.
 
 ```toml
 check_importable = false

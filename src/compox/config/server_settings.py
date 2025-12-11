@@ -61,8 +61,8 @@ class MinioSettings(BaseModel):
     model_config = ConfigDict(extra='forbid')
     provider: Literal["minio"] = "minio"
     start_instance: bool = True
-    port: int = 9091
-    console_port: int = 9090
+    port: int = 5483
+    console_port: int = 5482
     executable_path: str = os.path.join("minio", "minio_bin") if os.name != "nt" else os.path.join("minio", "minio.exe")
     storage_path: str = os.path.join("minio", "compox_store")
     # derived attributes
@@ -186,7 +186,7 @@ class Settings(BaseSettings, cli_parse_args=_PARSE_CLI):
     
     model_config = ConfigDict(extra='forbid', env_nested_delimiter='__', env_prefix="COMPOX_")
     
-    port: int = 5461
+    port: int = 5481
     deploy_algorithms_from: str = "./algorithms"  # points to default foo/bar algorithms
     
     info: CompoxInfo = CompoxInfo()

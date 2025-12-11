@@ -11,6 +11,7 @@ import shutil
 import glob
 import tempfile
 import zipimport
+import importlib
 import sys
 import re
 import hashlib
@@ -99,12 +100,10 @@ class AlgorithmDeployer:
                 "additional_parameters"
             ]
 
-        self.check_importable = pyproject_toml["tool"]["compox"][
-            "check_importable"
-        ]
-        self.obfuscate = pyproject_toml["tool"]["compox"]["obfuscate"]
-        self.hash_module = pyproject_toml["tool"]["compox"]["hash_module"]
-        self.hash_assets = pyproject_toml["tool"]["compox"]["hash_assets"]
+        self.check_importable = pyproject_toml.get("tool", {}).get("compox", {}).get("check_importable", False)
+        self.obfuscate = pyproject_toml.get("tool", {}).get("compox", {}).get("obfuscate", True)
+        self.hash_module = pyproject_toml.get("tool", {}).get("compox", {}).get("hash_module", True)
+        self.hash_assets = pyproject_toml.get("tool", {}).get("compox", {}).get("hash_assets", True)
 
     def parse_pyproject_toml(self, path_to_algorithm_directory: str) -> dict:
         """
@@ -382,7 +381,9 @@ class AlgorithmDeployer:
                     module_path + ".zip"
                 )
                 if not importable:
-                    raise ValueError("The runner cannot be imported.")
+                    raise ValueError(
+                        "The current environment cannot import the the algorithm module. Check the above logs for more details about the ImportError cause. This check can be disabled by setting check_importable to False in the affected algorithm's pyproject.toml file."
+                    )
 
             zip_bytes = open(module_path + ".zip", "rb").read()
             # store the zip file in the module-store collection
@@ -767,10 +768,14 @@ class AlgorithmDeployer:
         """
         try:
             sys.path.insert(0, path_to_zip)
-            module = zipimport.zipimporter(path_to_zip)
-            module.load_module("Runner")
+            importer = zipimport.zipimporter(path_to_zip)
+            spec = importlib.util.spec_from_loader("Runner", importer)
+            if spec is not None:
+                module = importlib.util.module_from_spec(spec)
+                importer.exec_module(module)
             return True
-        except Exception as e:
+        except ImportError as e:
+            logger.error(f"ImportError: {e}")
             return False
 
     @staticmethod

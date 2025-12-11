@@ -74,7 +74,7 @@ def invalid_alg_dir(tmp_path):
     d = tmp_path / "invalid"
     d.mkdir()
     (d / "pyproject.toml").write_text(
-        toml.dumps({"project": {"name": "foo", "version": "0.1"}})
+        toml.dumps({"some_invalid_section": {"foo": "bar"}})
     )
     (d / "Runner.py").write_text("class Runner: pass")
     return str(d)

@@ -1,4 +1,4 @@
-port: 5461
+port: 5484
 deploy_algorithms_from: "./algorithms"
 
 info:
@@ -17,8 +17,8 @@ storage:
   backend_settings:
     provider: "minio"
     start_instance: true
-    port: 9091
-    console_port: 9090
+    port: 5486
+    console_port: 5485
     executable_path: "minio/TESCAN3DBackendDB.exe"
     storage_path: "minio/compox_store"
 

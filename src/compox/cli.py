@@ -11,11 +11,13 @@ import subprocess
 import os
 from typing import Optional
 from compox.config.server_settings import Settings
+from compox.algorithm_debug import app as debug_app
 
 app = typer.Typer(
     help="This CLI tool contains commands for running the Compox."
 )
 
+app.add_typer(debug_app, name="debug")
 
 @app.command(
     "run",

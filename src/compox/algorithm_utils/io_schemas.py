@@ -12,6 +12,10 @@ class DataSchema(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
+class GenericSchema(DataSchema):
+    data: np.ndarray
+
+
 class SegmentationSchema(DataSchema):
     mask: np.ndarray
 
@@ -28,9 +32,9 @@ class ImageSchema(DataSchema):
             raise ValueError(
                 f"Image must be 2D (got {v.ndim} dimensions), grayscale or RGB (got {1 if v.ndim == 2 else v.shape[0]} channels)."
             )
-        if v.dtype not in [np.uint8, np.uint16, np.float32, np.float16]:
+        if v.dtype not in [np.uint8, np.uint16, np.float64, np.float32, np.float16]:
             raise ValueError(
-                f"Image must be uint8, uint16, float32 or float16 (got {v.dtype})."
+                f"Image must be uint8, uint16, float64, float32 or float16 (got {v.dtype})."
             )
         return v
     

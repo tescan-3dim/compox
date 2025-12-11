@@ -1,5 +1,8 @@
 # Compox
 Compox is a simple Python execution engine for Tescan applications. It's purpose is to run data processing algorithms written in Python on the server and report the results to the client application such as Tescan 3D Viewer or Picannto.
+
+See the [GitHub pages](https://tescan-3dim.github.io/compox) for full python API reference, docs and tutorials!
+
 ## Installation
 Compox can be installed through PyPI: 
 ```bash

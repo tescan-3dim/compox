@@ -1,6 +1,6 @@
-# A general template for creating a segmentation algorithm
+# Segmentation algorithm template
 
-This guide will cover the specifics needed to develop an image image segmentation algorithm. To see how compox algorithm should generally be structured, please refer to the algorithms/readme.md file.
+This guide will cover the specifics needed to develop an image segmentation algorithm. To see how compox algorithm should generally be structured, please refer to the algorithms/readme.md file.
 
 The algorithm folder is structured as follows:
 
@@ -56,7 +56,7 @@ additional_parameters = [
 ]
 ```
 
-The `check_importable` field is used to check if the algorithm can be imported. If set to `true`, compox will check if the algorithm can be imported before deploying it as a service. (NOTE: THIS CURRENTLY DOES NOT WORK).
+The `check_importable` field is used to check if the algorithm can be imported. If set to `true`, compox will check if the algorithm can be imported before deploying it as a service.
 
 ```toml
 check_importable = false

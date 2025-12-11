@@ -1,0 +1,21 @@
+[project]
+name = "flow_denoising"
+version = "0.1.0"
+
+[tool.compox]
+algorithm_type = "Image2Image"
+tags = ["image-denoising", "Image2Image"]
+description = "Removes most of the high-frequency components of the data using a Optical-Flow-driven Gaussian kernel with abilities to preserve the structures and avoid blurring, and outputs the filtered volume"
+supported_devices = ["cpu", "gpu"]
+default_device = "cpu"
+additional_parameters = [
+    {name = "sigmas", description = "Standard deviations of the Gaussian kernel in each dimension.", config = {type = "int_list", default = [1, 1, 1], adjustable = true}},
+    {name = "level", description = "Level parameter for optical flow filtering.", config = {type = "int", default = 3, adjustable = true}},
+    {name = "winsize", description = "Window size parameter for optical flow filtering.", config = {type = "int", default = 7, adjustable = true}},
+    {name = "optical_flow", description = "Enable or disable optical flow filtering.", config = {type = "bool", default = true, adjustable = true}},
+]
+
+check_importable = false
+obfuscate = true
+hash_module = true
+hash_assets = true
