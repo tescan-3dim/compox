@@ -35,7 +35,7 @@ compox run --config /path/to/config.yaml
 ```
 
 ### Deploying algorithms
-See Algorithm development tutorial for information about target structure of the deployable algorithms.
+See ([Algorithm development tutorial](/compox/algorithms/README.md))  for information about target structure of the deployable algorithms.
 
 Once your algorithm is ready, you can use the `compox deploy-algorithms` command to deploy it to your server. 
 To see the usage of the `deploy-algorithms` command, you can run:

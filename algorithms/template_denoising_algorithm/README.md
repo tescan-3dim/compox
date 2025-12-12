@@ -34,7 +34,7 @@ Next, you should fill out the [tool.compox] section. This section contains the m
 algorithm_type = "Image2Image"
 ```
 
- Each algorithm type has a set of potential tags, which are used to specify the general algorithm functionality. These tags can be found and modified in the `compox\algorithm_utils\algorithm_tags.yaml` file. Mutliple tags can be provided for one algorithm. For image denoising algorithms, we will use the `image-denoising` tag. 
+ Each algorithm type has a set of potential tags, which are used to specify the general algorithm functionality. Mutliple tags can be provided for one algorithm. For image denoising algorithms, we will use the `image-denoising` tag. 
  
  ```toml
 tags = ["image-denoising"]
@@ -46,8 +46,6 @@ The `description` field should contain a brief description of the algorithm.
 description = "Denoises a sequence of images using the total variation denoising algorithm."
 ```
 
-We can also specify additional parameters in the `additional_parameters` field. The `additional_parameters` field should contain a list of dictionaries, where each dictionary represents an additional parameter. Each parameter should have a `name`, `description` and `config` field. The `name` field should contain the name of the parameter. The `description` field should contain a brief description of the parameter. The `config` field should contain a dictionary with the following fields: `type`, `default`, `adjustable` and type-specific fields. To see more information about the possible parameter types see the `How to create an algorithm module` section. 
-
 For the denoising algorithm, we will add a `denoising_weight` parameter that will control the denoising strength. Because we want to set a range for the denoising weight, we will use the `float_range` parameter type. The `default` field should contain the default value of the parameter. The `min` and `max` fields should contain the minimum and maximum values of the parameter. The `step` field should contain the step size of the parameter. The `adjustable` field should be set to `true` if the parameter should be exposed to the user to adjust.
 
 ```toml
@@ -56,24 +54,7 @@ additional_parameters = [
 ]
 ```
 
-The `check_importable` field is used to check if the algorithm can be imported. If set to `true`, compox will check if the algorithm can be imported before deploying it as a service.
-
-```toml
-check_importable = false
-```
-
-The `obfuscate` field is used to obfuscate the algorithm code. If set to `true`, compox will obfuscate the algorithm code before deploying it as a service. The obfuscation is currently implemented as minimization of the code. It is recommended to set this field to `true` to reasonably protect the algorithm code.
-
-```toml
-obfuscate = true
-```
-
-You can use the `hash_module` and `hash_assets` fields to check if the algorithm module or assets have already been deployed. If they have been deployed, compox will not redeploy them, but reuse them for the current algorithm deployment. This can reduce the deployment time and the amount of data that needs to be stored.
-
-```toml
-hash_module = true
-hash_assets = true
-```
+To see more information about the possible parameter types see the [How to create an algorithm module](../README.md/#additional-parameters) section. 
 
 ## The algorithm dependencies
 

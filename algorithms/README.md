@@ -48,7 +48,7 @@ The following algorithm types are currently supported:
 If the algorithm does not fit into any of the above categories, the Runner class can either inherit from the BaseRunner class, and the data schemas can be defined manually (more on that in the next section), or a new algorithm type can be defined in the compox.algorithm_utils module.
 
 ### Algorithm tags
-The algorithm tags are a useful tool to categorize the algorithms for the users in the frontend application. Each algorithm type has a set of predefined tags, which are used to categorize the algorithms. This is important, because when several algorithms are tagged by a specific tag, the frontend developer can then operate with the assumption, that the algorithms with the same tag have the same input and output data schemas. The tags are defined in the `compox/src/compox/algorithm_utils/algorithm_tags.yaml` file. This file can be edited by the developer to add new tags or modify the existing ones.
+The algorithm tags are a useful tool to categorize the algorithms for the users in the frontend application. Each algorithm type has a set of predefined tags, which are used to categorize the algorithms. This is important, because when several algorithms are tagged by a specific tag, the frontend developer can then operate with the assumption, that the algorithms with the same tag have the same input and output data schemas.
 
 ### The `preprocess`, `inference` and `postprocess` methods
 The methods are `preprocess`, `inference` and `postprocess`. In general it does not matter which part of the algorithm is implemented in which method, because the run method will call them sequentially in the order they are listed above. The separation is mostly for readability and maintainability.
@@ -157,7 +157,7 @@ The algorithm type should be specified in the `tool.compox` section. The algorit
 algorithm_type = "AlgorithmType"
 ```
 
-Each algorithm type has a set of potential tags, which are used to specify the general algorithm functionality. These tags can be found and modified in the `compox\algorithm_utils\algorithm_tags.yaml` file. Multiple tags can be provided for one algorithm. For image denoising algorithms, we will use the `image-denoising` tag. 
+Each algorithm type has a set of potential tags, which are used to specify the general algorithm functionality. Multiple tags can be provided for one algorithm. For image denoising algorithms, we will use the `image-denoising` tag. 
  
 ```toml
 tags = ["tag1", "tag2", "tag3", ...]

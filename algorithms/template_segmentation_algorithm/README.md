@@ -34,7 +34,7 @@ Next, we will fill out the [tool.compox] section. This section contains the meta
 algorithm_type = "Image2Segmentation"
 ```
 
-Each algorithm type has a set of potential tags, which are used to specify the general algorithm functionality. These tags can be found and modified in the `compox\algorithm_utils\algorithm_tags.yaml` file. Mutliple tags can be provided for one algorithm. For image segmentation algorithms, we will use the `image-segmentation` tag. 
+Each algorithm type has a set of potential tags, which are used to specify the general algorithm functionality. Mutliple tags can be provided for one algorithm. For image segmentation algorithms, we will use the `image-segmentation` tag. 
  
  ```toml
 tags = ["image-segmenation"]
@@ -46,8 +46,6 @@ The `description` field should contain a brief description of the algorithm.
 description = "Performs a binary segmentation of a 3-D image using a skimage filter."
 ```
 
-We can also specify additional parameters in the `additional_parameters` field. The `additional_parameters` field should contain a list of dictionaries, where each dictionary represents an additional parameter. Each parameter should have a `name`, `description` and `config` field. The `name` field should contain the name of the parameter. The `description` field should contain a brief description of the parameter, that should be concise and descriptive enough to show to the user as a tooltip or help text. The `config` field should contain a dictionary with the following fields: `type`, `default`, `adjustable` and type-specific fields. To see more information about the possible parameter types see the `How to create an algorithm module` section.
-
 Here we will add a `thresholding_algorithm` parameter that will allow the user to select the thresholding algorithm to use. The `type` field is set to `string_enum` to specify that the parameter is a string with a predefined set of values. The `default` field is set to `otsu` to specify the default value of the parameter. The `options` field is set to a list of strings that specify the possible values of the parameter. The `adjustable` field is set to `true` to specify that the user should be able to select the thresholding algorithm to apply.
 
 ```toml
@@ -56,24 +54,7 @@ additional_parameters = [
 ]
 ```
 
-The `check_importable` field is used to check if the algorithm can be imported. If set to `true`, compox will check if the algorithm can be imported before deploying it as a service.
-
-```toml
-check_importable = false
-```
-
-The `obfuscate` field is used to obfuscate the algorithm code. If set to `true`, compox will obfuscate the algorithm code before deploying it as a service. The obfuscation is currently implemented as minimization of the code. It is recommended to set this field to `true` to reasonably protect the algorithm code.
-
-```toml
-obfuscate = true
-```
-
-You can use the `hash_module` and `hash_assets` fields to check if the algorithm module or assets have already been deployed. If they have been deployed, compox will not redeploy them, but reuse them for the current algorithm deployment. This can reduce the deployment time and the amount of data that needs to be stored.
-
-```toml
-hash_module = true
-hash_assets = true
-```
+To see more information about the possible parameter types see the [How to create an algorithm module](../README.md/#additional-parameters) section. 
 
 ## The algorithm dependencies
 
