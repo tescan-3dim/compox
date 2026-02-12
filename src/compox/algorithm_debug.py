@@ -1,43 +1,68 @@
 import json, typer
-from typing import Optional, Annotated
+from typing import Optional, Annotated, Dict, Any, List
 
 from compox.algorithm_utils.LocalDebugSession import LocalDebugSession
 
 app = typer.Typer(help="Commands for local debugging of algorithms")
 
-def parse_params(value: Optional[str]) -> Optional[dict]:
+
+def build_params_dict(items: Optional[List[str]]) -> Optional[Dict[str, Any]]:
     """
-    Parse a JSON string of algorithm parameters from the command line.
+    Convert repeated --param key=value options into a dict.
 
     Parameters
     ----------
-    value : str | None
-        A JSON string containing algorithm parameters.
+    items : list of str | None
+        List of strings in the form "key=value".
 
     Returns
     -------
     dict | None
-        Parsed dictionary of parameters, or ``None`` if no input was provided.
+        Dictionary of parameters, or ``None`` if no items were provided.
 
     Raises
     ------
     typer.BadParameter
-        If the string cannot be parsed as valid JSON.
+        If any item is not in the form "key=value".
     """
-
-    if value is None or value == "":
+    if not items:
         return None
-    try:
-        return json.loads(value)
-    except json.JSONDecodeError as e:
-        raise typer.BadParameter(f"--params must be valid JSON: {e}")
+
+    params: Dict[str, Any] = {}
+
+    for item in items:
+        key, sep, value = item.partition("=")
+        if not sep:
+            raise typer.BadParameter(
+                f"--param '{item}' must be in the form key=value"
+            )
+
+        key = key.strip()
+        value = value.strip()
+
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            parsed = value 
+
+        params[key] = parsed
+
+    return params
+
 
 @app.command("run")
 def debug_run(
     algo: str = typer.Option(".", help="Path to algorithm folder"),
     data: str = typer.Option(..., help="Path to dataset folder (e.g. PNG/TIF stack)"),
     device: str = typer.Option("cpu", help="Device to run on (cpu/cuda)"),
-    params: Annotated[Optional[str], typer.Option("--params", callback=parse_params, help="Algorithm params (JSON)")] = None,
+    param: Annotated[
+        Optional[List[str]],
+        typer.Option(
+            "--param",
+            "-p",
+            help="Algorithm parameter 'key=value'. Can be used multiple times."
+        )
+    ] = None,
 ):
     """
     Run an algorithm locally in debug mode (without Compox backend).
@@ -53,6 +78,7 @@ def debug_run(
     params : dict | None
         Algorithm parameters.
     """
+    params = build_params_dict(param)
 
     debug(algo_dir=algo, data=data, params=params, device=device)
 

@@ -1,0 +1,19 @@
+[project]
+name = "particle_seg_3d"
+version = "0.1.0"
+
+[tool.compox]
+algorithm_type = "Image2Segmentation"
+tags = ["instance-segmentation", "Image2Segmentation", "segmentation"]
+description = "ParticleSeg3D is an instance segmentation method that extracts individual particles from large images."
+supported_devices = ["cpu", "gpu"]
+default_device = "gpu"
+additional_parameters = [
+{name = "particle_size", description = "Size of the particles to segment.", config = {type = "float", default = 1.00, adjustable = true}},
+{name = "spacing", description = "Image spacing", config = {type = "float", default = 0.01, adjustable = true}}
+]
+
+check_importable = false
+obfuscate = true
+hash_module = true
+hash_assets = true

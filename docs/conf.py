@@ -7,7 +7,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = "compox"
-copyright = "2024, TESCAN 3DIM, s.r.o."
+copyright = "2024, TESCAN GROUP, a.s."
 author = "Jan Matula"
 
 import os

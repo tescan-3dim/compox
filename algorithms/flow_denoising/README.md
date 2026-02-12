@@ -1,5 +1,5 @@
 # FlowDenoising Deployment
-This tutorial shows how to prepare and deploy an algorithm to **Compox** and run it in **TESCAN 3D Viewer** (and optionally **TESCAN Picannto**). We’ll use the **FlowDenoising** algorithm from [GitHub](https://github.com/ElsevierSoftwareX/SOFTX-D-23-00180?tab=readme-ov-file) as an example. The **FlowDenoising** algorithm suppresses high-frequency noise using an **optical-flow-driven Gaussian kernel**. The **FlowDenoising** source code is distributed under the terms of the [GNU General Public License v3.0 (GPL-3.0)](https://www.gnu.org/licenses/gpl-3.0.html).
+This tutorial shows how to prepare and deploy an algorithm to **Compox** and run it in **Tescan 3D Viewer** (and optionally **Tescan Picannto**). We’ll use the **FlowDenoising** algorithm from [GitHub](https://github.com/ElsevierSoftwareX/SOFTX-D-23-00180?tab=readme-ov-file) as an example. The **FlowDenoising** algorithm suppresses high-frequency noise using an **optical-flow-driven Gaussian kernel**. The **FlowDenoising** source code is distributed under the terms of the [GNU General Public License v3.0 (GPL-3.0)](https://www.gnu.org/licenses/gpl-3.0.html).
 
 > **V. González-Ruiz, M.R. Fernández-Fernández, J.J. Fernández.**  
 > *Structure-preserving Gaussian denoising of FIB-SEM volumes.*  
@@ -22,6 +22,12 @@ You can set up your project and environment by running this command in your proj
 uv init
 ```
 
+Next, activate the project virtual environment:
+
+```bash
+.\.venv\Scripts\Activate.ps1
+```
+
 Once the environment is ready, install **Compox** using:
 
 ```bash
@@ -31,7 +37,7 @@ uv add compox
 Generate a server config:
 
 ```bash
-uv run compox generate-config --path app_server.yaml
+compox generate-config --path app_server.yaml
 ```
 
 Config `app_server.yaml` should appear in project’s root directory. Now create an empty folder called **`algorithms`** in your project’s root directory. You now have everything ready to start creating algorithms.
@@ -274,7 +280,7 @@ class Runner(Image2ImageRunner):
 ```
 
 ## 5. Debugging `Runner.py`
-Once your first implementation is ready, you will likely want to run it on a small data sample with debugging support to verify its behavior. The `compox.algorithm_debug.debug` function allows you to test your algorithm **without launching TESCAN 3D Viewer**. It does not load data the same way as the Viewer — the debug tool simply reads the input files directly from disk. However, the rest of the execution pipeline behaves the same: the data is stored in the database, then the `preprocess`, `inference`, and `postprocess` steps run in the same order, and the results are uploaded back to the database. If everything completes successfully, you should see an output similar to this:
+Once your first implementation is ready, you will likely want to run it on a small data sample with debugging support to verify its behavior. The `compox.algorithm_debug.debug` function allows you to test your algorithm **without launching Tescan 3D Viewer**. It does not load data the same way as the Viewer — the debug tool simply reads the input files directly from disk. However, the rest of the execution pipeline behaves the same: the data is stored in the database, then the `preprocess`, `inference`, and `postprocess` steps run in the same order, and the results are uploaded back to the database. If everything completes successfully, you should see an output similar to this:
 
 ```plaintext
 2025-11-27 15:04:58.393 | INFO     | compox.algorithm_utils.BaseRunner:run:244 - Starting execution.
@@ -300,7 +306,7 @@ The debug function accepts four inputs:
 
 - **device** – compute device to run the algorithm on (e.g., `"cpu"` or `"gpu"`).
 
-You can use your own data, or you can use one of the sample datasets included in **TESCAN 3D Viewer**.  
+You can use your own data, or you can use one of the sample datasets included in **Tescan 3D Viewer**.  
 For example, the **Oscillatoria** dataset can be downloaded from the **Welcome Page** of the Viewer.
 
 ![Sample Dataset](tutorial_images/sample_dataset.png)
@@ -308,7 +314,7 @@ For example, the **Oscillatoria** dataset can be downloaded from the **Welcome P
 Its default location is: 
 
 ```plaintext
-`...\User\Documents\TESCAN 3DIM, s.r.o\TESCAN 3D Viewer\Sample projects and datasets\Oscillatoria_dataset\Oscillatoria3D.tif`. 
+`...\User\Documents\TESCAN GROUP, a.s.\Tescan 3D Viewer\Sample projects and datasets\Oscillatoria_dataset\Oscillatoria3D.tif`. 
 ```
 You can also import any dataset into the Viewer, crop it, export it, and then use that exported data for debugging.
 
@@ -320,11 +326,12 @@ You have two main options for debugging:
 * Debug through the CLI
 
 #### Option 1: Use the `debug()` Function ####
-Add this code block at the bottom of your **`Runner.py`** and run it in your IDE (e.g. VS Code, PyCharm). When running `Runner.py` directly, the `algo` argument can be omitted because the debug tool detects the algorithm folder automatically.
+Add this code block at the bottom of your **`Runner.py`** and run it in your IDE (e.g. VS Code, PyCharm). When running `Runner.py` directly. 
 
 ```python
 if __name__ == "__main__":
     debug(
+        algo_dir="algorithms/flow_denoising",
         data="path to data",
         params={"sigmas": [1, 1, 1], "level": 3, "winsize": 7, "optical_flow": True},
         device="cpu",
@@ -341,7 +348,7 @@ uv run .\algorithms\flow_denoising\Runner.py
 Just insert `breakpoint()` wherever you want to pause execution. Then run your algorithm from the terminal like this:
 
 ```bash
-uv run compox debug run --data "path to data" --algo "path to Flowdenoising algorithm" --params '{"sigmas": [1, 1, 1], "level": 3, "winsize": 7, "optical_flow": true}' --device "cpu"
+compox debug run --data "path to data" --algo "path to Flowdenoising algorithm" --device "cpu" --param sigmas=[1,1,1] --param level=3 --param winsize=7  --param optical_flow=true
 ```
 
 ### Visualization of filtered data ###
@@ -372,6 +379,7 @@ import os
 if __name__ == "__main__":
     os.environ["COMPOX_DEBUG_SHOW"] = "1"
     debug(
+        algo_dir="algorithms/flow_denoising",
         data="path to data",
         params={"sigmas": [1, 1, 1], "level": 3, "winsize": 7, "optical_flow": True},
         device="cpu",
@@ -385,11 +393,133 @@ if os.getenv("COMPOX_DEBUG_SHOW") == "1":
     self.visualize(input_data, filtered_vol)
 ```
 
-This way, the visualization will appear when you run `Runner.py` directly for debugging, but it will not show any extra windows when the algorithm is executed from **TESCAN 3D Viewer**. After running, you should see a side-by-side comparison of the original and filtered slices:
+This way, the visualization will appear when you run `Runner.py` directly for debugging, but it will not show any extra windows when the algorithm is executed from **Tescan 3D Viewer**. After running, you should see a side-by-side comparison of the original and filtered slices:
 
 ![Visualization](tutorial_images/visualization.png)
 
-## 6. Algorithm Deployment ##
+## 6. Updating the progress bar in **Viewer** during inference ##
+This step is optional. By default, the Viewer already displays a progress bar that is updated during most stages of the algorithm execution. However, during the `inference` step the progress bar is not updated and only continues once inference is fully completed.
+
+### Simple progress updates inside `inference`
+
+You can update the progress bar from anywhere inside the `inference` method using the `set_progress` function. The function accepts a floating-point value in the range **0.0 – 1.0**, representing the overall progress.
+
+```python
+# Extract parameters
+sigmas = args["sigmas"]
+l = args["level"] 
+w =  args["winsize"]
+optical_flow = args["optical_flow"]
+self.set_progress(0.2)
+
+# Create Gaussian kernels for each dimension
+k_x = get_gaussian_kernel(int(sigmas[0]))
+k_y = get_gaussian_kernel(int(sigmas[1]))
+k_z = get_gaussian_kernel(int(sigmas[2]))
+kernel = [k_x, k_y, k_z]
+self.set_progress(0.3)
+
+# Apply filtering
+if optical_flow == True:
+    filtered_vol = OF_filter(input_data, kernel, l, w)
+else:
+    filtered_vol = no_OF_filter(input_data, kernel)
+self.set_progress(0.9)
+```
+
+The estimated remaining time is computed automatically by the Viewer based on how often and how smoothly the progress value is updated.
+
+### More accurate progress updates using callbacks ###
+
+In the FlowDenoising algorithm, most of the execution time is spent inside the `OF_filter` function. To obtain a more accurate progress estimation, the progress bar can be updated during the filtering itself, based on how much data has already been processed. This can be achieved by introducing a **progress callback** that is called repeatedly during processing.
+
+#### Creating a progress callback helper ####
+
+Add the following helper method to the `Runner` class:
+
+```python
+def make_progress_callback(self, start, end):
+        span = end - start
+
+        def callback(frac):
+            frac_clamped = max(0.0, min(1.0, float(frac)))
+            self.set_progress(start + span * frac_clamped)
+
+        return callback
+```
+
+This helper creates a callback function that maps a fractional progress value `(0.0 – 1.0)` into a selected range of the global progress bar.
+
+#### Passing the callback into `OF_filter` ####
+
+Next, create a progress callback instance and pass it into OF_filter.
+For simplicity, we map the entire inference step to the full progress range `0.0 – 1.0`:
+
+```python
+# Apply filtering
+progress_callback = self.make_progress_callback(0.0, 1.0)
+if optical_flow == True:
+    filtered_vol = OF_filter(input_data, kernel, l, w, progress_callback)
+else:
+    filtered_vol = no_OF_filter(input_data, kernel)
+```
+
+#### Propagating progress through the filtering implementation ####
+
+To enable progress reporting inside the filtering code, the original implementation of `OF_filter` must be extended to accept the callback and propagate it to all axis-specific filtering functions.
+
+```python
+def OF_filter(vol, kernel, l, w, progress_callback):
+    mean = vol.mean()
+    filtered_vol_Z = OF_filter_along_Z(vol, kernel[0], l, w, mean, axis_progress_callback=progress_callback)
+    filtered_vol_ZY = OF_filter_along_Y(filtered_vol_Z, kernel[1], l, w, mean, axis_progress_callback=progress_callback)
+    filtered_vol_ZYX = OF_filter_along_X(filtered_vol_ZY, kernel[2], l, w, mean, axis_progress_callback=progress_callback)
+
+    return filtered_vol_ZYX
+```
+
+#### Reporting progress per axis ####
+
+For progress reporting inside each axis loop, add the following helper function near the top of `flowdenoising_sequential.py`:
+
+```python
+def report_axis_progress(axis_progress_callback, axis, slice_idx, number_of_slices, axes = 3):
+    if axis_progress_callback is None or number_of_slices <= 0:
+        return
+    base = axis / axes
+    span = 1.0 / axes
+    frac = (slice_idx + 1) / number_of_slices
+    axis_progress_callback(base + span * frac)
+```
+
+For simplicity, this implementation assumes that processing time is evenly distributed across all axes.
+
+#### Calling progress reporting inside axis filters ####
+
+Finally, call `report_axis_progress` from inside each axis-specific filtering function. Example for filtering along the **Z** axis:
+
+```python
+def OF_filter_along_Z(vol, kernel, l, w, mean, axis_progress_callback=None):
+    ...
+    for z in range(Z_dim):
+        ...
+        report_axis_progress(axis_progress_callback, 0, z, Z_dim)
+
+    return filtered_vol
+```
+
+For the remaining axes:
+```python
+report_axis_progress(axis_progress_callback, 1, y, Y_dim)
+```
+
+```python
+report_axis_progress(axis_progress_callback, 2, x, X_dim)
+```
+
+This approach provides smooth and meaningful progress updates during inference, even for large volumetric datasets. A similar approach can also be applied to the `no_OF_filter` function if needed.
+
+## 7. Algorithm Deployment ##
 Once your algorithm is implemented and ready, you can deploy it to **Compox** using two options:
 * **Single command**
 * **GUI**
@@ -398,7 +528,7 @@ Once your algorithm is implemented and ready, you can deploy it to **Compox** us
 Simply run this command:
 
 ```bash
-uv run compox deploy-algorithms --config app_server.yaml
+compox deploy-algorithms --config app_server.yaml
 ```
 
 If you are running the server for the first time, the process might take a bit longer because **Compox** needs to download and initialize the **MinIO** service.
@@ -416,7 +546,7 @@ gui:
 Then start the **Compox** server with:
 
 ```bash
-uv run compox run --config app_server.yaml
+compox run --config app_server.yaml
 ```
 
 After running this command, you should see the **Compox** icon appear in the **system tray**:
@@ -432,20 +562,20 @@ From there, you can:
 * If you are using the GUI, right-click the tray icon and select **Quit** to stop the server. Using `Ctrl + C` in the terminal will not close the server properly when the GUI mode is active.
 * If you are running from the terminal (without GUI), you can simply press `Ctrl + C`.
 
-## 7. Running FlowDenoising in **`TESCAN 3D Viewer`** ##
+## 8. Running FlowDenoising in **`TESCAN 3D Viewer`** ##
 After deploying the algorithm to **Compox**, you can run it directly on data loaded in **TESCAN 3D Viewer**.
 
 ### Step 1: Start the Compox server
 
-Before launching `TESCAN 3D Viewer`, make sure the **Compox** is running. Start the server with:
+Before launching `Tescan 3D Viewer`, make sure the **Compox** is running. Start the server with:
 
 ```bash
-uv run compox run --config app_server.yaml
+compox run --config app_server.yaml
 ```
 
-### Step 2: Connect `TESCAN 3D Viewer` to **Compox** ###
+### Step 2: Connect `Tescan 3D Viewer` to **Compox** ###
 
-After starting the server, open `TESCAN 3D Viewer`.
+After starting the server, open `Tescan 3D Viewer`.
 If you see an error saying that the Compox backend connection failed, don’t worry — you can fix this by adding a new backend manually:
 
 1. Go to **Menu → Tools → Preferences**
@@ -453,7 +583,7 @@ If you see an error saying that the Compox backend connection failed, don’t wo
 3. Set the **Protocol** type to `HTTP`
 4. Check the **Custom** checkbox
 5. Set the **Port** number based on your `app_server.yaml` file
-    * The default port is 5461
+    * The default port is 5481
     * If you changed it, you can verify the value in the first line of `app_server.yaml`
 
 Your **Preferences** window should now look like this:
@@ -462,7 +592,7 @@ Your **Preferences** window should now look like this:
 
 ### Step 3: Run the algorithm from the **Compox** extension
 
-Once the backend is connected, import your dataset in `TESCAN 3D Viewer`.
+Once the backend is connected, import your dataset in `Tescan 3D Viewer`.
 
 Then open the **Compox Backend Extension** by clicking the **Compox** icon in the upper-right corner of the interface.
 

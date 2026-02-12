@@ -74,11 +74,11 @@ The server uses pydantic settings for configuration. The options can be either s
 |                                  | `deploy_algorithms_from`  | `"./algorithms"`                   | Directory for algorithm deployment sources.                                |
 |                                  | `log_path`                | `"LOG_DEFAULT:compox.log"`     | Path to the main log file (supports dynamic prefixes).                     |
 |                                  | `config`                  | `None`                             | Optional config path override.                                             |
-| `info`                           | `product_name`              | `"TESCAN 3D Backend"`              | Product display name.                                                      |
+| `info`                           | `product_name`              | `"Tescan Compox Backend"`          | Product display name.                                                      |
 | `info`                           | `server_tags`               | `[]` → auto appends `"compox"` | Tags attached to the server. `"compox"` is added automatically.        |
 | `info`                           | `group_name`                | `"TESCAN GROUP, a.s."`             | Name of the corporate group.                                               |
-| `info`                           | `organization_name`         | `"TESCAN 3DIM, s.r.o."`            | Full name of the organization.                                             |
-| `info`                           | `organization_domain`       | `"tescan3dim.com"`                 | Domain used in server configuration.                                       |
+| `info`                           | `organization_name`         | `"TESCAN GROUP, a.s."`             | Full name of the organization.                                             |
+| `info`                           | `organization_domain`       | `"tescan.com"`                     | Domain used in server configuration.                                       |
 | `gui`                            | `algorithm_add_remove_in_menus` | `False`                        | Enables/disables GUI menu for algorithm management.                        |
 | `gui`                            | `use_systray`               | `False`                            | Enables/disables systray GUI integration.                                  |
 | `gui`                            | `icon_path`                 | Path to the installed package resource | Path to the systray icon (supports dynamic prefixes)               |

@@ -4,9 +4,18 @@ import os
 
 from files.src.flowdenoising_sequential import get_gaussian_kernel, OF_filter, no_OF_filter
 from compox.algorithm_utils.Image2ImageRunner import Image2ImageRunner
-from compox.debug import debug
+from compox.algorithm_debug import debug
 
 class Runner(Image2ImageRunner):
+
+    def make_progress_callback(self, start, end):
+        span = end - start
+
+        def callback(frac):
+            frac_clamped = max(0.0, min(1.0, float(frac)))
+            self.set_progress(start + span * frac_clamped)
+            
+        return callback
 
     def inference(self, input_data: np.ndarray, args: dict = {}) -> np.ndarray:
 
@@ -23,8 +32,11 @@ class Runner(Image2ImageRunner):
         kernel = [k_x, k_y, k_z]
 
         # Apply filtering
+        progress_callback = self.make_progress_callback(0.0, 1.0)
         if optical_flow == True:
-            filtered_vol = OF_filter(input_data, kernel, l, w)
+            filtered_vol = OF_filter(input_data, kernel, l, w, 
+                                     # progress_callback  # Optional progress reporting (see README, Section 6)
+                                     )
         else:
             filtered_vol = no_OF_filter(input_data, kernel)
 
@@ -61,6 +73,7 @@ class Runner(Image2ImageRunner):
 if __name__ == "__main__":
     os.environ["COMPOX_DEBUG_SHOW"] = "1"
     debug(
+        algo_dir ="algorithms/flow_denoising",
         data="C:\\Users\\jezek\\Documents\\Datasets\\T3D\\Algae\\PNG_Slices_test",
         params={"sigmas": [1, 1, 1], "level": 3, "winsize": 7, "optical_flow": True},
         device="cpu",

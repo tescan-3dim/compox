@@ -34,7 +34,7 @@ def read_root(request: Request) -> Union[RootMessage, ResponseMessage]:
     Returns
     -------
     Union[RootMessage, ResponseMessage]
-        
+
     """
 
     try:
@@ -46,7 +46,7 @@ def read_root(request: Request) -> Union[RootMessage, ResponseMessage]:
         group = settings.info.group_name
         organization = settings.info.organization_name
         domain = settings.info.organization_domain
-        
+
         version = importlib.metadata.version('compox')
         cuda_available, cuda_capable_device_count = (
             check_system_gpu_availability()

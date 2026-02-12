@@ -2,10 +2,10 @@ port: 5484
 deploy_algorithms_from: "./algorithms"
 
 info:
-  product_name: "TESCAN 3D Backend"
+  product_name: "Tescan Compox Backend"
   group_name: "TESCAN GROUP, a.s."
-  organization_name: "TESCAN 3DIM, s.r.o."
-  organization_domain: "tescan3dim.com"
+  organization_name: "TESCAN GROUP, a.s."
+  organization_domain: "tescan.com"
 
 gui:
   algorithm_add_remove_in_menus: true
@@ -19,7 +19,7 @@ storage:
     start_instance: true
     port: 5486
     console_port: 5485
-    executable_path: "minio/TESCAN3DBackendDB.exe"
+    executable_path: "minio/TescanCompoxBackendDB.exe"
     storage_path: "minio/compox_store"
 
 inference:

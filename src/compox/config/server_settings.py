@@ -28,11 +28,11 @@ class CompoxInfo(BaseModel):
     The model is configured to forbid extra fields that are not defined in the model.
     """
     model_config = ConfigDict(extra='forbid')
-    product_name: str = "TESCAN 3D Backend"
+    product_name: str = "Tescan Compox Backend"
     server_tags: list[str] = []
     group_name: str = "TESCAN GROUP, a.s."
-    organization_name: str = "TESCAN 3DIM, s.r.o."
-    organization_domain: str = "tescan3dim.com"
+    organization_name: str = "TESCAN GROUP, a.s."
+    organization_domain: str = "tescan.com"
     @model_validator(mode="after")
     def add_default_tag(self):
         if "compox" not in self.server_tags:
