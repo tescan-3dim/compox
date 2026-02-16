@@ -1,3 +1,7 @@
+# v2.1.2 (16-02-2026)
+
+- Updated links in README.md
+
 # v2.1.1 (13-02-2026)
 
 - Added ParticleSeg3D tutorial

@@ -35,7 +35,7 @@ compox run --config /path/to/config.yaml
 ```
 
 ### Deploying algorithms
-See ([Algorithm development tutorial](/compox/algorithms/README.md))  for information about target structure of the deployable algorithms.
+See the relevant section in the [documentation](https://tescan-3dim.github.io/compox/development.html#how-to-create-an-algorithm-module) for information about target structure of the deployable algorithms. You may also refer to our [tutorials](https://tescan-3dim.github.io/compox/tutorials.html) that will guide you through the preparation and deployment of selected algorithms.
 
 Once your algorithm is ready, you can use the `compox deploy-algorithms` command to deploy it to your server. 
 To see the usage of the `deploy-algorithms` command, you can run:
