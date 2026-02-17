@@ -1,7 +1,7 @@
 # Compox
 Compox is a simple Python execution engine for Tescan applications. It's purpose is to run data processing algorithms written in Python on the server and report the results to the client application such as Tescan 3D Viewer or Picannto.
 
-See the [GitHub pages](https://tescan-3dim.github.io/compox) for full python API reference, docs and tutorials!
+See the [GitHub pages](https://tescangroup.github.io/compox) for full python API reference, docs and tutorials!
 
 ## Installation
 Compox can be installed through PyPI: 
@@ -35,7 +35,7 @@ compox run --config /path/to/config.yaml
 ```
 
 ### Deploying algorithms
-See the relevant section in the [documentation](https://tescan-3dim.github.io/compox/development.html#how-to-create-an-algorithm-module) for information about target structure of the deployable algorithms. You may also refer to our [tutorials](https://tescan-3dim.github.io/compox/tutorials.html) that will guide you through the preparation and deployment of selected algorithms.
+See the relevant section in the [documentation](https://tescangroup.github.io/compox/development.html#how-to-create-an-algorithm-module) for information about target structure of the deployable algorithms. You may also refer to our [tutorials](https://tescangroup.github.io/compox/tutorials.html) that will guide you through the preparation and deployment of selected algorithms.
 
 Once your algorithm is ready, you can use the `compox deploy-algorithms` command to deploy it to your server. 
 To see the usage of the `deploy-algorithms` command, you can run:
