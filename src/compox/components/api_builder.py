@@ -18,18 +18,28 @@ from compox.components.minio_wrapper import MinIOWrapper
 from compox.components.celery_builder import build_celery
 from compox.components.db_connection_builder import build_database_connection
 
-from compox.server_utils import check_and_create_database_collections, get_subprocess_fn
+from compox.algorithm_utils.AlgorithmExporter import AlgorithmExporter
+from compox.database_connection.BaseConnection import BaseConnection
+
+from compox.server_utils import (
+    check_and_create_database_collections,
+    get_subprocess_fn,
+)
 
 from compox.routers import (
     algorithms_controller,
+    deployment_controller,
     execution_controller,
     execution_manager,
     file_controller,
     file_controller_v1,
-    root
+    root,
+    sample_controller,
+    training_controller,
+    checkpoint_controller,
 )
-      
-      
+
+
 class ApiBuilder:
     def __init__(self):
         self.lifespan = None
@@ -48,8 +58,12 @@ class ApiBuilder:
         self.settings = settings
         return self
 
-    def with_database_connection(self, database_connection):
+    def with_database_connection(self, database_connection: BaseConnection):
         self.database_connection = database_connection
+        return self
+
+    def with_algorithm_exporter(self, algorithm_exporter: AlgorithmExporter):
+        self.algorithm_exporter = algorithm_exporter
         return self
 
     def with_executor(self, executor: _base.Executor | Celery | None = None):
@@ -59,7 +73,7 @@ class ApiBuilder:
     def with_route(self, route: APIRouter):
         self.routes.append(route)
         return self
-    
+
     def with_middleware(self, middleware, middleware_settings):
         self.middleware = middleware
         self.middleware_settings = middleware_settings
@@ -70,14 +84,13 @@ class ApiBuilder:
         app.state.database_connection = self.database_connection
         app.state.executor = self.executor
         app.state.settings = self.settings
-
+        app.state.algorithm_exporter = self.algorithm_exporter
         for route in self.routes:
             app.include_router(route)
-            
+
         if self.middleware is not None:
             app.add_middleware(
-                CORSMiddleware,
-                **self.middleware_settings.model_dump()
+                CORSMiddleware, **self.middleware_settings.model_dump()
             )
 
         return app
@@ -87,7 +100,7 @@ class ApiBuilder:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Lifespan context manager for the FastAPI app. 
+    Lifespan context manager for the FastAPI app.
     The subprocess for minio is started here and killed when the app is closed.
 
     Parameters
@@ -102,31 +115,38 @@ async def lifespan(app: FastAPI):
     """
     # setup subprocess mechanism that runs on both linux and win
     subprocess_fn = get_subprocess_fn()
-    
+
     lifecycle_subprocesses = {}
-    
+
     settings = app.state.settings
-    
+
     # maybe run local minio subprocess
-    if (settings.storage.backend_settings.provider == "minio" and 
-        settings.storage.backend_settings.start_instance):
-        
+    if (
+        settings.storage.backend_settings.provider == "minio"
+        and settings.storage.backend_settings.start_instance
+    ):
+
         if not os.path.exists(settings.storage.backend_settings.storage_path):
             raise ValueError("Minio storage path does not exist!")
-        
+
         minio_wrapper = MinIOWrapper(settings)
         lifecycle_subprocesses["minio"] = minio_wrapper.start(subprocess_fn)
 
-    new_collections = check_and_create_database_collections(
-        [
-            "data-store",
-            "execution-store",
-            "algorithm-store",
-            "module-store",
-            "asset-store",
-        ],
-        database_connection=app.state.database_connection,
-    )
+        new_collections = check_and_create_database_collections(
+            [
+                "data-store",
+                "execution-store",
+                "algorithm-store",
+                "module-store",
+                "asset-store",
+                "training-store",
+                "sample-store",
+                "algorithm-checkpoint-store",
+                "stop-requests",
+                "deploy-store",
+            ],
+            database_connection=app.state.database_connection,
+        )
     if len(new_collections) > 0:
         fastapi_logger.info(f"Created new collections: {new_collections}")
 
@@ -138,10 +158,10 @@ async def lifespan(app: FastAPI):
     # if the app database connection has s3_client, close it
     if app.state.database_connection.s3_client:
         app.state.database_connection.s3_client.close()
-        
+
     for lifecycle_subprocess in lifecycle_subprocesses.values():
         atexit.register(lifecycle_subprocess.kill)
-        
+
 
 def build_api(settings: Settings, with_lifespan: bool = True) -> FastAPI:
     """
@@ -164,37 +184,46 @@ def build_api(settings: Settings, with_lifespan: bool = True) -> FastAPI:
     ValueError
         If server backend is invalid.
     """
-    
+
     # Build database connection
     database_connection = build_database_connection(settings)
+
+    # build algorithm exporter
+    algorithm_exporter = AlgorithmExporter(
+        database_connection=database_connection
+    )
 
     # Task execution
     match settings.inference.backend_settings.executor:
         case "fastapi_background_tasks":
             task_executor = ThreadPoolExecutor(
                 max_workers=settings.inference.backend_settings.worker_number
-                )
+            )
         case "celery":
             task_executor = build_celery(settings)
         case _:
             raise ValueError("Invalid server backend")
 
     # build api with lifecycle management
-    api_builder = (ApiBuilder()
+    api_builder = (
+        ApiBuilder()
         .with_settings(settings)
         .with_database_connection(database_connection)
+        .with_algorithm_exporter(algorithm_exporter)
         .with_executor(task_executor)
         .with_route(root.router)
         .with_route(algorithms_controller.router)
+        .with_route(deployment_controller.router)
         .with_route(execution_controller.router)
         .with_route(file_controller.router)
         .with_route(file_controller_v1.router)
         .with_route(execution_manager.router)
+        .with_route(sample_controller.router)
+        .with_route(training_controller.router)
+        .with_route(checkpoint_controller.router)
         .with_middleware(CORSMiddleware, settings.middleware)
     )
     if with_lifespan:
         api_builder.with_lifespan(lifespan)
-        
-    return api_builder.build()
 
-    
+    return api_builder.build()

@@ -10,6 +10,7 @@ from tests.test_utils import (
     execute_algorithm,
     get_algorithm_id,
     get_execution_record,
+    get_training_record,
     delete_file,
 )
 import time

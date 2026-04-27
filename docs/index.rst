@@ -10,6 +10,9 @@ Welcome to the Compox documentation!
 
    development
    tutorials
+   training_client_workflow
+   execution_client_workflow
+   algorithm_training_guide
    reference
 
 Indices and tables

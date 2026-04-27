@@ -32,12 +32,19 @@ class ImageSchema(DataSchema):
             raise ValueError(
                 f"Image must be 2D (got {v.ndim} dimensions), grayscale or RGB (got {1 if v.ndim == 2 else v.shape[0]} channels)."
             )
-        if v.dtype not in [np.uint8, np.uint16, np.float64, np.float32, np.float16]:
+        if v.dtype not in [
+            np.uint8,
+            np.uint16,
+            np.float64,
+            np.float32,
+            np.float16,
+        ]:
             raise ValueError(
                 f"Image must be uint8, uint16, float64, float32 or float16 (got {v.dtype})."
             )
         return v
-    
+
+
 class VolumeSchema(DataSchema):
     volume: np.ndarray
     mask: Optional[np.ndarray] = Field(default=None)
@@ -48,8 +55,9 @@ class VolumeSchema(DataSchema):
     @classmethod
     def check_volume(cls, v: np.ndarray) -> np.ndarray:
         if v.ndim != 3:
-            raise ValueError(f"Volume must be a 3 dimensional array.")
+            raise ValueError("Volume must be a 3 dimensional array.")
         return v
+
 
 class MeshSchema(DataSchema):
     vertices: np.ndarray
@@ -60,15 +68,18 @@ class MeshSchema(DataSchema):
     @classmethod
     def check_verts(cls, v: np.ndarray):
         if v.ndim != 2 or v.shape[1] != 3 or v.dtype != float:
-            raise ValueError(f"Mesh vertices must be Nx3 numpy array of floats")
+            raise ValueError("Mesh vertices must be Nx3 numpy array of floats")
         return v
 
     @field_validator("faces")
     @classmethod
     def check_faces(cls, v: np.ndarray):
         if v.ndim != 2 or v.shape[1] != 3 or v.dtype != int:
-            raise ValueError(f"Mesh vertices must be Nx3 numpy array of integers pointing into vertices array.")
+            raise ValueError(
+                "Mesh vertices must be Nx3 numpy array of integers pointing into vertices array."
+            )
         return v
+
 
 class AlignmentSchema(DataSchema):
     points1: Optional[List[np.ndarray]] = Field(default=[])

@@ -31,7 +31,9 @@ class AttributeSafetyRunner(Image2ImageRunner):
         """
         self.my_asset = [0]
 
-    def preprocess(self, input_data: dict, args: dict = {}) -> np.ndarray:
+    def preprocess(
+        self, input_data: dict, args: dict | None = None
+    ) -> np.ndarray:
         """
         Preprocess the request data before feeding into model for inference.
 
@@ -58,7 +60,9 @@ class AttributeSafetyRunner(Image2ImageRunner):
         """
         self._inference_override = types.MethodType(fn, self)
 
-    def inference(self, data: np.ndarray, args: dict = {}) -> np.ndarray:
+    def inference(
+        self, data: np.ndarray, args: dict | None = None
+    ) -> np.ndarray:
         """
         Run the inference.
 
@@ -76,7 +80,9 @@ class AttributeSafetyRunner(Image2ImageRunner):
             return self._inference_override(data, args)
         raise NotImplementedError("No inference logic provided.")
 
-    def postprocess(self, data: list, args: dict = {}) -> dict:
+    def postprocess(
+        self, data: list, args: dict | None = None
+    ) -> dict:
         return self.my_attribute
 
 
@@ -87,7 +93,7 @@ def run_inference(runner, inference_fn):
     runner.initialize()
     runner.set_inference_fn(inference_fn)
     task_handler = DebuggingTaskHandler("test_task_id")
-    task_handler.set_as_current_task_handler()
+    task_handler.set_as_current_handler()
     return runner.run(
         {
             "input_dataset_ids": ["test_image_id"],

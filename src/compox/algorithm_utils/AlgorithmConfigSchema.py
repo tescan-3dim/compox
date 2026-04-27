@@ -10,6 +10,7 @@ from pydantic import (
 )
 from typing import List, Literal, Union
 import warnings
+import re
 
 
 class ParameterConfigSchema(BaseModel):
@@ -48,15 +49,30 @@ class ParameterConfigSchema(BaseModel):
     min: Union[int, float, None] = None  # For range types
     max: Union[int, float, None] = None  # For range types
     step: Union[int, float, None] = None  # For range types
+    decimal_precision: int | None = None
 
 
 class AdditionalParameterSchema(BaseModel):
     name: str
+    displayed_name: str = ""
     description: str = ""
     config: ParameterConfigSchema
 
+    @staticmethod
+    def _default_displayed_name(name: str) -> str:
+        """
+        Convert a machine-friendly parameter name to a human-friendly label.
+        """
+        normalized = name.replace("_", " ").replace("-", " ").strip()
+        normalized = re.sub(r"\s+", " ", normalized)
+        if not normalized:
+            return name
+        return normalized[:1].upper() + normalized[1:]
+
     @model_validator(mode="after")
     def check_default_type(self):
+        if self.displayed_name == "":
+            self.displayed_name = self._default_displayed_name(self.name)
         if self.description == "":
             warnings.warn(
                 f"Description is empty for additional parameter '{self.name}'. "
@@ -84,6 +100,18 @@ class AdditionalParameterSchema(BaseModel):
         }
 
         expected_type = expected_types.get(self.config.type)
+        float_types = {"float", "float_range", "float_enum", "float_list"}
+        if self.config.decimal_precision is not None:
+            if self.config.decimal_precision < 0:
+                raise ValueError(
+                    f"Validation error in additional parameter {self.name}. "
+                    "decimal_precision must be greater than or equal to 0."
+                )
+            if self.config.type not in float_types:
+                raise ValueError(
+                    f"Validation error in additional parameter {self.name}. "
+                    "decimal_precision can only be used with float parameter types."
+                )
         # this checks if the default value matches the expected type
         if (
             not isinstance(self.config.default, expected_type)
@@ -193,6 +221,11 @@ class AlgorithmConfigSchema(BaseModel):
     additional_parameters: List[AdditionalParameterSchema] = Field(
         default_factory=list
     )
+    training_parameters: List[AdditionalParameterSchema] = Field(
+        default_factory=list
+    )
+    removable: bool = False
+    exportable: bool = True
 
     @model_validator(mode="after")
     def check_algorithm_type(self):

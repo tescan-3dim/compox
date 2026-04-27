@@ -4,10 +4,9 @@ All rights reserved
 """
 
 import numpy as np
-from typing import Type
 
 from compox.algorithm_utils.BaseRunner import BaseRunner
-from compox.algorithm_utils.io_schemas import SegmentationSchema, DataSchema
+from compox.algorithm_utils.io_schemas import SegmentationSchema
 
 
 class Segmentation2SegmentationRunner(BaseRunner):
@@ -18,7 +17,7 @@ class Segmentation2SegmentationRunner(BaseRunner):
     algorithm_type = "Segmentation2Segmentation"
 
     def fetch_data(
-        self, file_ids: list[dict], *keys: str, parallel: bool = False
+        self, file_ids: list[str], *keys: str, parallel: bool = False
     ) -> list[dict]:
         """
         Fetches the data from the database. The data is fetches as a list of dictionaries, where
@@ -29,10 +28,8 @@ class Segmentation2SegmentationRunner(BaseRunner):
 
         Parameters
         ----------
-        file_ids : list[dict]
-            List of the datasets to upload. Each dataset is a defined as a dictionary.
-        pydantic_data_schema : Type[DataSchema]
-            The pydantic schema of the data. Must inherit from the DataSchema class.
+        file_ids : list[str]
+            The identifiers of the data files in the database.
         *keys : str
             Optional keys to fetch from the HDF5 file, if not provided, all keys
             will be fetched.
@@ -44,7 +41,9 @@ class Segmentation2SegmentationRunner(BaseRunner):
         data : list[dict]
             List of the datasets fetched from the database as dictionaries.
         """
-        return self.task_handler.fetch_data(file_ids, SegmentationSchema, *keys, parallel=parallel)
+        return self.task_handler.fetch_data(
+            file_ids, SegmentationSchema, *keys, parallel=parallel
+        )
 
     def post_data(
         self,
@@ -63,8 +62,6 @@ class Segmentation2SegmentationRunner(BaseRunner):
         ----------
         data : list[dict]
             List of the datasets to upload. Each dataset is a defined as a dictionary.
-        pydantic_data_schema : Type[DataSchema], optional
-            The pydantic schema to validate the data.
         parallel : bool, optional
             If True, the data will be uploaded in parallel. Default is False.
 
@@ -75,7 +72,9 @@ class Segmentation2SegmentationRunner(BaseRunner):
         """
         return self.task_handler.post_data(data, SegmentationSchema, parallel)
 
-    def preprocess(self, input_data: dict, args: dict = {}) -> np.ndarray:
+    def preprocess(
+        self, input_data: dict, args: dict | None = None
+    ) -> np.ndarray:
         """
         Default Segmentation2Segmentation preprocessing method. This method is used to fetch
         the data from the database, preprocess it and pass it to the inference
@@ -101,7 +100,7 @@ class Segmentation2SegmentationRunner(BaseRunner):
             is provided. The images are also converted to a numpy array.
         """
         # this fetches the image data from the data storage as a list of dictionaries
-        input_images = self.fetch_data(input_data["input_dataset_ids"],"mask")
+        input_images = self.fetch_data(input_data["input_dataset_ids"], "mask")
 
         # store the number of input images, so we can check if the output corresponds
         # to the input
@@ -116,7 +115,9 @@ class Segmentation2SegmentationRunner(BaseRunner):
 
         return input_images
 
-    def postprocess(self, data: np.ndarray, args: dict = {}) -> list[str]:
+    def postprocess(
+        self, data: np.ndarray, args: dict | None = None
+    ) -> list[str]:
         """
         Default Segmentation2Segmentation postprocessing method. This method is used to
         postprocess the data after the inference method has been called. It
@@ -143,7 +144,7 @@ class Segmentation2SegmentationRunner(BaseRunner):
         Raises
         ------
         ValueError
-            If input data is not a numpy array with same shape as output data from inference method. 
+            If input data is not a numpy array with same shape as output data from inference method.
         """
         assert isinstance(
             data, np.ndarray
@@ -162,7 +163,9 @@ class Segmentation2SegmentationRunner(BaseRunner):
         output_dataset_ids = self.post_data(output_dicts)
         return output_dataset_ids
 
-    def inference(self, data: np.ndarray, args: dict = {}) -> np.ndarray:
+    def inference(
+        self, data: np.ndarray, args: dict | None = None
+    ) -> np.ndarray:
         """
         Default Segmentation2Segmentation inference method. This method is used to run the
         inference on the data. The data is a numpy array. The inference method

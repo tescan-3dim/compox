@@ -3,17 +3,27 @@ Copyright 2024 TESCAN 3DIM, s.r.o.
 All rights reserved
 """
 
+import json
+import os
+from typing import List, Optional, Union
 from fastapi import APIRouter, Request, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+from starlette.exceptions import HTTPException
 from pydantic import ValidationError
+from starlette.background import BackgroundTask
+
 from compox.pydantic_models import (
     AlgorithmRegisteredResponse,
     ResponseMessage,
     S3ModelFileRecord,
     FailedAlgorithmRegisteredResponse,
 )
-import json
-from typing import List, Optional, Union
+from compox.algorithm_utils.AlgorithmExporter import (
+    AlgorithmNotFoundError,
+    MinorVersionNotFoundError,
+    CheckpointNotFoundError,
+    InvalidCheckpointError,
+)
 
 router = APIRouter(prefix="/api", tags=["algorithms-controller"])
 
@@ -47,17 +57,17 @@ def get_algorithm(
 
     request: Request
         The request.
-        
+
     Returns
     -------
     Union[AlgorithmRegisteredResponse, FailedAlgorithmRegisteredResponse, JSONResponse]
         The algorithm.
     """
     database_connection = request.app.state.database_connection
-    # get the model key with the highest minor version by model_name and major_version
+    algorithm_collection = "algorithm-store"
     try:
         # get all algoerithms
-        all_algorithms = database_connection.list_objects("algorithm-store")
+        all_algorithms = database_connection.list_objects(algorithm_collection)
 
         if len(all_algorithms) == 0:
             return JSONResponse(
@@ -68,13 +78,12 @@ def get_algorithm(
             )
 
         # find the algorithm with the requested name and major version
-        minor_version = -1  # the highest minor version
         found_algorithm = None
 
         for key in all_algorithms:
             algorithm_json = json.loads(
                 database_connection.get_objects(
-                    "algorithm-store",
+                    algorithm_collection,
                     [key["Key"]],
                 )[0]
             )
@@ -85,61 +94,54 @@ def get_algorithm(
                 and algorithm_json["algorithm_major_version"].lower()
                 == algorithm_major_version.lower()
             ):
-                if (
-                    int(algorithm_json["algorithm_minor_version"])
-                    > minor_version
-                ):
-                    minor_version = int(
-                        algorithm_json["algorithm_minor_version"]
-                    )
-                    found_algorithm = algorithm_json
+                found_algorithm = algorithm_json
+                break
 
         if found_algorithm is not None:
-            if minor_version != -1:
-                try:
-                    return AlgorithmRegisteredResponse(
-                        algorithm_id=found_algorithm["algorithm_id"],
-                        algorithm_input_queue="NOT IMPLEMENTED YET",
-                        algorithm_minor_version=found_algorithm[
-                            "algorithm_minor_version"
-                        ],
-                        algorithm_name=found_algorithm["algorithm_name"],
-                        algorithm_version=found_algorithm[
-                            "algorithm_major_version"
-                        ],
-                        algorithm_type=found_algorithm["algorithm_type"],
-                        algorithm_tags=found_algorithm["algorithm_tags"],
-                        algorithm_description=found_algorithm[
-                            "algorithm_description"
-                        ],
-                        supported_devices=found_algorithm["supported_devices"],
-                        default_device=found_algorithm["default_device"],
-                        additional_parameters=found_algorithm[
-                            "additional_parameters"
-                        ],
-                    )
-                except ValidationError as e:
-                    return FailedAlgorithmRegisteredResponse(
-                        algorithm_name=found_algorithm["algorithm_name"],
-                        algorithm_version=found_algorithm[
-                            "algorithm_major_version"
-                        ],
-                        message=f"The algorithm has not been configured correctly.\n{e}",
-                    )
-            else:
-                return JSONResponse(
-                    status_code=404,
-                    content={
-                        "detail": "Model with the requested name and major version not found in the model store"
-                    },
+            try:
+                return AlgorithmRegisteredResponse(
+                    algorithm_id=found_algorithm["algorithm_id"],
+                    algorithm_minor_versions=list(
+                        found_algorithm["algorithm_minor_version"].keys()
+                    ),
+                    latest_algorithm_minor_version=found_algorithm[
+                        "latest_algorithm_minor_version"
+                    ],
+                    algorithm_name=found_algorithm["algorithm_name"],
+                    algorithm_version=found_algorithm[
+                        "algorithm_major_version"
+                    ],
+                    algorithm_type=found_algorithm["algorithm_type"],
+                    algorithm_tags=found_algorithm["algorithm_tags"],
+                    algorithm_description=found_algorithm[
+                        "algorithm_description"
+                    ],
+                    supported_devices=found_algorithm["supported_devices"],
+                    default_device=found_algorithm["default_device"],
+                    additional_parameters=found_algorithm[
+                        "additional_parameters"
+                    ],
+                    training_parameters=found_algorithm.get(
+                        "training_parameters", {}
+                    ),
+                    removable=found_algorithm.get("removable", False),
+                    exportable=found_algorithm.get("exportable", True),
+                )
+            except ValidationError as e:
+                return FailedAlgorithmRegisteredResponse(
+                    algorithm_name=found_algorithm["algorithm_name"],
+                    algorithm_version=found_algorithm[
+                        "algorithm_major_version"
+                    ],
+                    message=f"The algorithm has not been configured correctly.\n{e}",
                 )
         else:
             return JSONResponse(
-                    status_code=404,
-                    content={
-                        "detail": "Failed to get algorithm."
-                    },
-                )
+                status_code=404,
+                content={
+                    "detail": "Model with the requested name and major version not found in the model store"
+                },
+            )
     except Exception as _:
         return JSONResponse(
             status_code=500,
@@ -189,10 +191,11 @@ async def list_model_files(
     negative_tags = negative_tag
 
     database_connection = request.app.state.database_connection
+    algorithm_collection = "algorithm-store"
 
     try:
         # get all algoerithms
-        all_algorithms = database_connection.list_objects("algorithm-store")
+        all_algorithms = database_connection.list_objects(algorithm_collection)
 
         if len(all_algorithms) == 0:
             return JSONResponse(
@@ -206,7 +209,7 @@ async def list_model_files(
         for key in all_algorithms:
             algorithm_json = json.loads(
                 database_connection.get_objects(
-                    "algorithm-store",
+                    algorithm_collection,
                     [key["Key"]],
                 )[0]
             )
@@ -252,9 +255,11 @@ async def list_model_files(
                 algorithms.append(
                     AlgorithmRegisteredResponse(
                         algorithm_id=algorithm_json["algorithm_id"],
-                        algorithm_input_queue="NOT IMPLEMENTED YET",
-                        algorithm_minor_version=algorithm_json[
-                            "algorithm_minor_version"
+                        algorithm_minor_versions=list(
+                            algorithm_json["algorithm_minor_version"].keys()
+                        ),
+                        latest_algorithm_minor_version=algorithm_json[
+                            "latest_algorithm_minor_version"
                         ],
                         algorithm_name=algorithm_json["algorithm_name"],
                         algorithm_version=algorithm_json[
@@ -270,6 +275,11 @@ async def list_model_files(
                         additional_parameters=algorithm_json[
                             "additional_parameters"
                         ],
+                        training_parameters=algorithm_json.get(
+                            "training_parameters", {}
+                        ),
+                        removable=algorithm_json.get("removable", False),
+                        exportable=algorithm_json.get("exportable", True),
                     )
                 )
             except ValidationError as _:
@@ -283,3 +293,102 @@ async def list_model_files(
                 "detail": f"Failed to list algorithms due to an internal server error: {e}"
             },
         )
+
+
+@router.get(
+    "/v0/algorithm/{algorithm_name}/{algorithm_major_version}/export",
+    summary="Export an algorithm",
+    description=(
+        "Exports an algorithm by name and major version. "
+        "Optionally allows selecting a minor version and a specific checkpoint."
+    ),
+)
+async def export_algorithm(
+    request: Request,
+    algorithm_name: str,
+    algorithm_major_version: int,
+    algorithm_minor_version: Optional[int] = Query(
+        None, description="Optional minor version of the algorithm"
+    ),
+    checkpoint_id: Optional[str] = Query(
+        None, description="Optional checkpoint identifier"
+    ),
+) -> StreamingResponse:
+    """
+    Export an algorithm by its name and version.
+
+    Parameters
+    ----------
+    request : Request
+        The request.
+    algorithm_name : str
+        Algorithm name.
+    algorithm_major_version : int
+        Algorithm major version.
+    algorithm_minor_version : Optional[int]
+        Optional minor version of the algorithm.
+    checkpoint_id : Optional[str]
+        Optional checkpoint identifier.
+
+    Returns
+    -------
+    StreamingResponse
+        The exported algorithm as a zip file.
+    """
+
+    exporter = request.app.state.algorithm_exporter
+    database_connection = request.app.state.database_connection
+    algorithm_collection = "algorithm-store"
+    for item in database_connection.list_objects(algorithm_collection):
+        key = item["Key"]
+        algorithm_json = json.loads(
+            database_connection.get_objects(
+                algorithm_collection,
+                [key],
+            )[0]
+        )
+        if (
+            algorithm_json["algorithm_name"].lower() == algorithm_name.lower()
+            and algorithm_json["algorithm_major_version"].lower()
+            == str(algorithm_major_version).lower()
+        ):
+            if not algorithm_json.get("exportable", True):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Algorithm is not exportable.",
+                )
+            break
+
+    try:
+        fname, tmp_zip_path, export_stream = (
+            exporter.export_algorithm_zip_stream(
+                algorithm_name=algorithm_name,
+                algorithm_major_version=str(algorithm_major_version),
+                algorithm_minor_version=(
+                    str(algorithm_minor_version)
+                    if algorithm_minor_version is not None
+                    else None
+                ),
+                algorithm_checkpoint_id=checkpoint_id,
+            )
+        )
+    except (
+        AlgorithmNotFoundError,
+        MinorVersionNotFoundError,
+        CheckpointNotFoundError,
+    ) as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except InvalidCheckpointError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to export algorithm due to an internal server error.",
+        ) from e
+
+    return StreamingResponse(
+        export_stream,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+        background=BackgroundTask(os.remove, tmp_zip_path),
+    )

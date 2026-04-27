@@ -68,13 +68,6 @@ The `obfuscate` field is used to obfuscate the algorithm code. If set to `true`,
 obfuscate = true
 ```
 
-You can use the `hash_module` and `hash_assets` fields to check if the algorithm module or assets have already been deployed. If they have been deployed, compox will not redeploy them, but reuse them for the current algorithm deployment. This can reduce the deployment time and the amount of data that needs to be stored.
-
-```toml
-hash_module = true
-hash_assets = true
-```
-
 ## The algorithm dependencies
 
 The algorithm can use any libraries from the global compox environment. Additional dependencies can be provided as python submodules. Here we will use the `numpy` library to handle the image data. We also implemented a simple `image_denoising` module that contains an `__init__.py` file and a `denosing_utils.py` file. The `denoising_utils.py` file contains the `denoise_image` function that performs the denoising of the images. The `image_denoising` module should be placed in the root directory of the algorithm.
@@ -139,7 +132,7 @@ def load_assets(self):
 Next, we can implement the `preprocess` method, where we retrieve the data form the data storage and preprocess it. We can also load the the additional parameters that the algorithm requires.
     
 ```python
-def preprocess(self, input_data: dict, args: dict = {}) -> tuple:
+def preprocess(self, input_data: dict, args: dict | None = None) -> tuple:
     """Preprocess the request data before feeding into model for inference.
 
     Parameters
@@ -182,7 +175,7 @@ def preprocess(self, input_data: dict, args: dict = {}) -> tuple:
 Next, we can implement the `inference` method, where we perform the denoising of the images. The `inference` method should return the denoised images.
 
 ```python
-def inference(self, data, args: dict = {}) -> dict:
+def inference(self, data, args: dict | None = None) -> dict:
     """
     Run the inference.
 
@@ -221,7 +214,7 @@ def inference(self, data, args: dict = {}) -> dict:
 Finally, we can implement the `postprocess` method, where we convert the denoised images to the desired output format and post it to the data storage. We finally return the outputs data identifiers.
 
 ```python
-def postprocess(self, data: np.array, args: dict = {}) -> list[str]:
+def postprocess(self, data: np.array, args: dict | None = None) -> list[str]:
     """
     Postprocess the output data.
 
@@ -258,4 +251,12 @@ def postprocess(self, data: np.array, args: dict = {}) -> list[str]:
 
 ## Deploying the algorithm
 
-To deploy the finished algorithm, you can use the `pdm run deployment template_denoising_algorithm` command. This command will deploy the algorithm to the compox. The algorithm can also be added through compox systray interface by clicking the "Add Algorithm" button and selecting the algorithm directory.
+To deploy the finished algorithm, use:
+
+```bash
+compox deploy-algorithms --config app_server.yaml --name dummy
+```
+
+This deploys the algorithm to Compox. The algorithm can also be added through
+the Compox systray interface by clicking `Add Algorithm` and selecting the
+algorithm directory.

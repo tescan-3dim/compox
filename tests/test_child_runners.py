@@ -20,7 +20,7 @@ from compox.algorithm_utils.Image2SegmentationRunner import (
 from compox.algorithm_utils.Segmentation2SegmentationRunner import (
     Segmentation2SegmentationRunner,
 )
-from compox.tasks.context_task_handler import current_task_handler
+from compox.tasks.context_handler import current_handler
 
 
 PREPROCESS_CONFIG = [
@@ -125,7 +125,7 @@ def test_preprocess_all_runners(
         def inference(self, data, args={}):
             return data
 
-    current_task_handler.set(fake_handler)
+    current_handler.set(fake_handler)
     runner = RunnerClass.__new__(RunnerClass)
     runner.initialize(device="cpu")
     inp = {"input_dataset_ids": ["a", "b", "c"]}
@@ -178,7 +178,7 @@ def test_postprocess_all_runners(
         def inference(self, data, args={}):
             return data
 
-    current_task_handler.set(fake_handler)
+    current_handler.set(fake_handler)
     runner = RunnerClass.__new__(RunnerClass)
     runner.initialize(device="cpu")
     setattr(runner, attr_name, expected_val)

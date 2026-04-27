@@ -1,47 +1,21 @@
 [project]
 name = "algorithm_template"
 version = "1.0.0"
-description = "PDM template for algorithms intended for deployment into T3D python compute backend"
-authors = [
-]
-dependencies = [
-    "python-computing-backend @ file:///${PROJECT_ROOT}/../../compox",
-]
-requires-python = "==3.10.*"
+description = "Minimal generic Compox algorithm template."
+authors = []
 readme = "README.md"
-license = {text = "MIT"}
+requires-python = ">=3.10"
+license = {text = "Apache-2.0"}
 
 [tool.compox]
-# Whether to check if the module is importable by performing an import
-# test.
+algorithm_type = "Generic"
+tags = ["template", "generic"]
+description = "Minimal generic Compox algorithm template."
+supported_devices = ["cpu"]
+default_device = "cpu"
+additional_parameters = [
+    {name = "scale", displayed_name = "Scale", description = "Multiplier applied to the input data.", config = {type = "float", default = 1.0, decimal_precision = 2, adjustable = true}},
+    {name = "bias", displayed_name = "Bias", description = "Bias added after scaling.", config = {type = "float", default = 0.0, decimal_precision = 2, adjustable = true}},
+]
 check_importable = false
-
-# Whether to obfuscate the .py files. The obfuscation
-# is not implemented yet. For now, the .py files are minimized using
-# python_minifier.
-obfuscate = false
-
-# Whether to check the hash of the module against existing modules in
-# the database server. Will check if the module already exists by comparing
-# the etag hash. If the module already exists, it will reuse it and return
-# the existing module id instead of uploading.
-hash_module = false
-
-# Whether to check the hash of the algorithm assets against existing assets in
-# the database server. Will check if the asset already exists by comparing
-# their hashes. If the asset already exists, it will reuse it and return
-# the existing asset id instead of uploading.
-hash_assets = false
-
-[tool.pdm]
-distribution = false
-
-[[tool.pdm.source]]
-url = "https://download.pytorch.org/whl/cu118"
-verify_ssl = true
-name = "torch"
-
-[[tool.pdm.source]]
-url = "https://download.pytorch.org/whl/cu118"
-verify_ssl = true
-name = "torchvision"
+obfuscate = true

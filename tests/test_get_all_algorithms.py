@@ -25,8 +25,6 @@ def test_all_fields(server_url):
         assert "algorithm_id" in algorithm
         assert "algorithm_name" in algorithm
         assert "algorithm_version" in algorithm
-        assert "algorithm_minor_version" in algorithm
-        assert "algorithm_input_queue" in algorithm
 
 
 # Test 3: Test multiple requests
@@ -43,8 +41,6 @@ def test_multiple_requests(server_url):
             assert "algorithm_id" in algorithm
             assert "algorithm_name" in algorithm
             assert "algorithm_version" in algorithm
-            assert "algorithm_minor_version" in algorithm
-            assert "algorithm_input_queue" in algorithm
         if i > 0:
             assert response.json() == previous_response.json()
         previous_response = response

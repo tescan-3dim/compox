@@ -3,97 +3,73 @@ Copyright 2024 TESCAN 3DIM, s.r.o.
 All rights reserved
 """
 
-import torch
+import os
+
+from compox.algorithm_debug import debug
 from compox.algorithm_utils.BaseRunner import BaseRunner
-import compox.algorithm_utils.io_schemas as schemas
-from dependencies.utils import my_function
+from compox.algorithm_utils.io_schemas import GenericSchema
+from dependencies.utils import scale_and_shift
 
 
 class Runner(BaseRunner):
     """
-    The runner class for the foo algorithm.
+    Minimal generic runner template.
     """
-
-    def __init__(self, task_handler, device: str = "cpu"):
-        """
-        The foo runner.
-        """
-        super().__init__(task_handler, device)
 
     def load_assets(self):
         """
-        The assets to load for the foo algorithm.
+        Load packaged assets once and cache them on the runner instance.
         """
+        return None
 
-        state_dict = self.fetch_asset("files/state_dict.pt")
-        self.model = torch.load(state_dict)
-
-    def preprocess(self, input_data, args: dict = {}) -> tuple:
-        """Preprocess the request data before feeding into model for inference.
-
-        Parameters
-        ----------
-        input_data : data
-            The input data.
-        args : dict, optional
-            The arguments, by default None
-
-        Returns
-        -------
-        tuple
-            The preprocessed data.
+    def preprocess(
+        self, input_data: dict, args: dict | None = None
+    ) -> list[dict]:
         """
-        self.log_message("Preprocessing the Foo input data.")
-
-        input_data = self.fetch_data(
-            input_data["input_dataset_ids"], schemas.DataSchema
+        Fetch generic input datasets and pass them to inference.
+        """
+        self.log_message("Preprocessing generic input data.")
+        datasets = self.fetch_data(
+            input_data["input_dataset_ids"], GenericSchema
         )
-        input_data = my_function(input_data)
+        return datasets
 
-        return input_data, args
-
-    def inference(self, model, preprocessed_data: tuple, args: dict = {}) -> dict:
-        """Run the inference on the preprocessed data.
-
-        Parameters
-        ----------
-        model : object
-            The model.
-        preprocessed_data : tuple
-            The preprocessed data.
-        args : dict, optional
-            The arguments, by default None
-
-        Returns
-        -------
-        dict
-            The inference result.
+    def inference(
+        self, data: list[dict], args: dict | None = None
+    ) -> list[dict]:
         """
-
-        self.log_message("Running the Foo inference.")
-
-        output_data = self.model(preprocessed_data)
-
-        return output_data
-
-    def postprocess(self, inference_output: str, args: dict = {}) -> dict:
-        """Postprocess the inference output.
-
-        Parameters
-        ----------
-        inference_output : dict
-            The inference output.
-        args : dict, optional
-            The arguments, by default None
-
-        Returns
-        -------
-        dict
-            The postprocessed output.
+        Apply a simple transform to each input dataset.
         """
+        args = {} if args is None else args
+        scale = float(args.get("scale", 1.0))
+        bias = float(args.get("bias", 0.0))
 
-        self.log_message("Postprocessing the Foo inference output.")
+        self.log_message(
+            f"Running generic inference with scale={scale} and bias={bias}."
+        )
 
-        output_dataset_ids = self.post_data(inference_output, schemas.DataSchema)
+        outputs = []
+        total = max(len(data), 1)
+        for i, item in enumerate(data):
+            outputs.append({"data": scale_and_shift(item["data"], scale, bias)})
+            self.set_progress((i + 1) / total)
 
-        return output_dataset_ids
+        return outputs
+
+    def postprocess(
+        self, inference_output: list[dict], args: dict | None = None
+    ) -> list[str]:
+        """
+        Upload the transformed outputs back to Compox storage.
+        """
+        self.log_message("Postprocessing generic inference output.")
+        return self.post_data(inference_output, GenericSchema)
+
+
+if __name__ == "__main__":
+    debug(
+        algo_dir=os.path.dirname(__file__),
+        data="path to data",
+        params={"scale": 2.0, "bias": 1.0},
+        device="cpu",
+    )

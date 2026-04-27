@@ -62,7 +62,11 @@ def build_server(
         backend_logger = logger
         backend_logger.remove()
     else:
-        backend_logger = configure_logging(settings.log_path)
+        backend_logger = configure_logging(
+            settings.log_path,
+            console_level=settings.logging.console_level,
+            file_level=settings.logging.file_level,
+        )
 
     if settings.ssl.use_ssl:
         if not os.path.exists(settings.ssl.ssl_keyfile):

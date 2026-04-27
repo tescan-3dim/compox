@@ -56,7 +56,7 @@ def base_runner(task_handler):
         def postprocess(self):
             pass
 
-    task_handler.set_as_current_task_handler()
+    task_handler.set_as_current_handler()
     base_runner = Runner.__new__(Runner)
     base_runner.initialize(device="cpu")
     base_runner._load_assets()

@@ -15,8 +15,6 @@ def test_basic_positive_get_algorithm(server_url):
     assert "algorithm_id" in response.json()
     assert "algorithm_name" in response.json()
     assert "algorithm_version" in response.json()
-    assert "algorithm_minor_version" in response.json()
-    assert "algorithm_input_queue" in response.json()
 
 
 # Test 2: Algorithm Name Case Sensitivity
@@ -28,8 +26,6 @@ def test_case_sensitivity(server_url):
     assert "algorithm_id" in response.json()
     assert "algorithm_name" in response.json()
     assert "algorithm_version" in response.json()
-    assert "algorithm_minor_version" in response.json()
-    assert "algorithm_input_queue" in response.json()
 
 
 # Test 3: Non-Existent Algorithm Name
@@ -91,8 +87,6 @@ def test_multiple_requests(server_url):
         assert "algorithm_id" in response.json()
         assert "algorithm_name" in response.json()
         assert "algorithm_version" in response.json()
-        assert "algorithm_minor_version" in response.json()
-        assert "algorithm_input_queue" in response.json()
         if i > 0:
             assert response.json() == prev_response.json()
         prev_response = response

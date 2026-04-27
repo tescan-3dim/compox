@@ -9,6 +9,9 @@ from compox.config.server_settings import get_server_settings
 from compox.internal.logging import configure_logging
 from compox.components.celery_builder import build_celery
 from compox.tasks.celery_task import execution_task_celery  # noqa F401
+from compox.training.training_task_celery import (  # noqa F401
+    training_task_celery,
+)
 
 
 def parse_args() -> object:
@@ -37,7 +40,11 @@ def main():
     """
     args = parse_args()
     settings = get_server_settings(args.config)
-    _ = configure_logging(log_path=settings.log_path)
+    _ = configure_logging(
+        log_path=settings.log_path,
+        console_level=settings.logging.console_level,
+        file_level=settings.logging.file_level,
+    )
 
     if settings.inference.backend_settings.executor == "celery":
         celery_app = build_celery(settings)

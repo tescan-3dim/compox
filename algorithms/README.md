@@ -1,34 +1,40 @@
 # How to create an algorithm module
 The algorithm module is a Python package that contains the algorithm code and assets. The algorithm module should be structured in a specific way in order to work properly with Compox.
 
+See also:
+- ../docs/algorithm_training_guide.md
+- ../docs/training_client_workflow.md
+
 The algorithm should be structured as follows:
 
 ```plaintext
 algorithm_name/
-    ├── __init__.py
-    ├── Runner.py
-    ├── pyproject.toml
-    └── files/
-        ├── file1
-        └── file2
-    └── some_internal_submodule/
-        ├── __init__.py
-        ├── module1.py
-        └── module2.py
-
+    |-- __init__.py
+    |-- Runner.py
+    |-- pyproject.toml
+    |-- files/
+    |   |-- file1
+    |   `-- file2
+    `-- some_internal_submodule/
+        |-- __init__.py
+        |-- module1.py
+        `-- module2.py
 ```
+
 ## The Runner.py file
-The Runner.py file is a mandatory component of the algorithm module. It serves as the entry point for Compox to run the algorithm. It must define a class named Runner. The Runner class should inherit either from the BaseRunner class, or a Runner class specific to the algorithm type (see more in the algorithm types section). The Runner classes can be imported from the compox.algorithm_utils module. There are several mandatory methods that the Runner class must implement in order to work properly. The Runner class can also implement additional methods and functions that are not mandatory. But these can also be included as a submodule in the algorithm directory.
+The Runner.py file is a mandatory component of the algorithm module. It serves as the entry point for Compox to run the algorithm. It must define a class named `Runner`. The `Runner` class can inherit from `BaseRunner` (for generic behavior) or from a Runner class specific to the algorithm type (see below). Runner classes can be imported from the `compox.algorithm_utils` package.
+
+**Why this exists:** Compox always loads and instantiates `Runner` as the algorithm entry point, so keeping it in a predictable location allows deployment, caching, and execution to work consistently.
 
 ### Algorithm types
-There are several types of algorithms that can be implemented in Compox. The main difference between the algorithm types is in the way input and output data is handled. The algorihtm type is defined in the algorithm's `pyproject.toml` file and the class, from which the Runner class should inherit. An example of algorithm type is e.g. and Image2Image algorithm, which receives an image as input and returns an image as output. The pyproject.toml file should thus contain the following line:
-    
+The algorithm type is defined in the algorithm's `pyproject.toml` file. Your Runner inheritance should match the declared type, but Compox does not infer the type from the class. If you inherit from `BaseRunner`, set `algorithm_type = "Generic"` (or leave it as `Undefined` for development, but not for production). For example, an Image2Image algorithm receives an image as input and returns an image as output. In that case, the `pyproject.toml` file should contain:
+
 ```toml
 [tool.compox]
 algorithm_type = "Image2Image"
 ```
 
-Furthermore the algotihm's Runner class should inherit from the Image2ImageRunner class, which is imported from the compox.algorithm_utils module:
+and the Runner should inherit from the matching Runner class:
 
 ```python
 from compox.algorithm_utils.Image2ImageRunner import Image2ImageRunner
@@ -40,105 +46,118 @@ class Runner(Image2ImageRunner):
 ```
 
 The following algorithm types are currently supported:
-- Image2Image: The algorithm receives an image as input and returns an image as output.
-- Image2Embedding: The algorithm receives an image as input and returns a deep learning embedding as output.
-- Image2Segmentation: The algorithm receives an image as input and returns a segmentation mask as output.
-- Image2Alignment: The algorithm receives two images as input and returns an alignment transformation matrix as output.
+- Image2Image
+- Image2Embedding
+- Image2Segmentation
+- Image2Alignment
+- Segmentation2Segmentation
+- Generic
 
-If the algorithm does not fit into any of the above categories, the Runner class can either inherit from the BaseRunner class, and the data schemas can be defined manually (more on that in the next section), or a new algorithm type can be defined in the compox.algorithm_utils module.
+`Undefined` exists as a fallback/default but should not be used for real algorithms.
+
+**Why this exists:** typed runners provide schema and convenience helpers so you can focus on model logic instead of wiring input/output formats. `BaseRunner` is for algorithms with custom schemas or non-standard inputs/outputs.
 
 ### Algorithm tags
-The algorithm tags are a useful tool to categorize the algorithms for the users in the frontend application. Each algorithm type has a set of predefined tags, which are used to categorize the algorithms. This is important, because when several algorithms are tagged by a specific tag, the frontend developer can then operate with the assumption, that the algorithms with the same tag have the same input and output data schemas.
+The algorithm tags are a useful tool to categorize algorithms for frontend applications. Tags allow clients to assume that algorithms with the same tag follow the same input/output schemas.
+
+**Why this exists:** clients can filter and group algorithms by capability (e.g., “denoising”), and safely assume consistent I/O across similarly tagged algorithms.
 
 ### The `preprocess`, `inference` and `postprocess` methods
-The methods are `preprocess`, `inference` and `postprocess`. In general it does not matter which part of the algorithm is implemented in which method, because the run method will call them sequentially in the order they are listed above. The separation is mostly for readability and maintainability.
+The `run` method calls `preprocess`, then `inference`, then `postprocess`. Each of these methods accepts two arguments (after `self`): the input data for that stage and a dictionary of user arguments (`args`).
 
-Each of the methods must have exactly two inputs. The first input is some data that is passed between the methods (except for the preprocess method, which receives the input data identifiers defined by the user). The second input is a dictionary of arguments that the user has passed to the algorithm.
+- `preprocess(self, input_data: dict, args: dict | None = None)` typically loads data using `fetch_data`, prepares it, and returns the result for `inference`.
+- `inference(self, data: Any, args: dict | None = None)` runs the model or algorithm.
+- `postprocess(self, data: Any, args: dict | None = None)` should upload output datasets using `post_data` and return a list of dataset IDs.
 
-The `preprocess` method in general should serve for fetching the data using the `fetch_data` method, processing the data and returning the result. The preprocess method will receive the input_data and args as arguments. The first input is a dictionary currently containing only one key: `input_dataset_ids`. The value of the `input_dataset_ids` key is a list of dataset ids. The args is a dictionary containing the arguments that the user has passed to the algorithm. The output of the preprocess method does not have a set format, but it will be passed to the inference method, so it must be compatible with the inference method. The `inference` method should serve for running the actual algorithm on the data. The input of the inference method is the output of the preprocess method and the output is the result of the algorithm's inference phase. The `postprocess` method should postprocess the result of the algorithm and pass it to the `post_data` method. The output of the postprocess method is a list strings, where each string is a dataset identifier of the posted data. This list will be returned to the user, who can then use these dataset identifiers to fetch the posted data from the database.
+The `input_data` dictionary contains identifiers provided by the user (commonly `input_dataset_ids`).
+
+**Why this exists:** separating the pipeline makes data flow and logging explicit, enables progress reporting, and allows easier debugging.
 
 ### The `fetch_data` method for BaseRunner
-Because the preprocess does not directly receive any data, only the data identifiers, the Runner class can use the `fetch_data` method to retrieve the data from the database. The `fetch_data` method receives a list of dataset identifiers and a pydantic model as arguments. The pydantic model is used to validate the fetched data. The output of the `fetch_data` method is a list of dictionaries, where each dictionary contains the data of one dataset.
+`fetch_data` retrieves datasets by IDs and validates them using a Pydantic schema. It expects a list of file ID strings.
 
 Example of fetching data:
+
 ```python
 embeddings = self.fetch_data(input_data["input_dataset_ids"], EmbeddingSchema)
 ```
 
-The EmbeddingSchema is a pydantic model that is used to validate the fetched data. The pydantic schemas are defined in the fastapi/app/algorithms/io_schemas.py file. The EmbeddingSchema is defined as:
+The Pydantic schemas are defined in `compox/src/compox/algorithm_utils/io_schemas.py`, but you are not required to use them. You can define your own schemas by inheriting from `DataSchema` (useful for type checking and validation).
 
-```python
-class EmbeddingSchema(DataSchema):
-    features: np.ndarray
-    input_size: tuple
-    original_size: tuple
-```
+**Why this exists:** schemas provide consistent validation and type hints for downstream code, while still allowing custom formats when needed.
 
 ### The `fetch_data` method for specific algorithm types
-The `fetch_data` for Runners inherited from specific algorithm types is a bit different. The `fetch_data` method does not accept a pydantic model as an argument, because the data schemas are predefined for each algorithm type. The `fetch_data` method receives a list of dataset identifiers as an argument. The output of the `fetch_data` method is a list of dictionaries, where each dictionary contains the data of one dataset.
+Runner subclasses for specific algorithm types use predefined schemas, so `fetch_data` does not take a schema argument. It still expects a list of file ID strings.
 
-Example of fetching data with a Runner inherited from the Image2ImageRunner class:
+Example for Image2Image:
+
 ```python
 input_data = self.fetch_data(input_data["input_dataset_ids"])
 ```
 
+This fetches datasets validated against the `ImageSchema`.
+
 ### The `post_data` method for BaseRunner
-After the computation is done, the Runner class can use the `post_data` method of the class to post the result of the computation to the database. The `post_data` method receives the result of the computation and a pydantic model as arguments. The result is expected to be a list of dictionaries, where each dictionary contains the data of one dataset. The pydantic model is used to validate the result before posting it to the database. Output of the `post_data` method is a list of dataset identifiers of the posted data.
+`post_data` uploads output datasets and validates them with a Pydantic schema. It expects a list of dictionaries, one per output dataset.
 
 Example of posting data:
+
 ```python
 output_dataset_ids = self.post_data(output, MaskSchema)
 ```
 
-The output is a list of dictionaries, where each dictionary contains the data of one dataset. The MaskSchema is a pydantic model that is used to validate the posted data. The MaskSchema is defined as:
-
-```python
-class MaskSchema(DataSchema):
-    mask: np.ndarray
-```
-
 ### The `post_data` method for specific algorithm types
-The `post_data` method for Runners inherited from specific algorithm types follows the same pattern as the `fetch_data` method. The `post_data` method does not accept a pydantic model as an argument, because the data schemas are predefined for each algorithm type. The `post_data` method receives the result of the computation as an argument. The result is expected to be a list of dictionaries, where each dictionary contains the data of one dataset. The output of the `post_data` method is a list of dataset identifiers of the posted data.
+For specific algorithm types, `post_data` uses predefined schemas, so no schema argument is needed.
 
-Example of posting data with a Runner inherited from the Image2ImageRunner class:
+Example for Image2Image:
+
 ```python
 output_dataset_ids = self.post_data(output)
 ```
 
-
 ### The `load_assets` method
-It is expected that the Runner class will work with a machine learning model. Because loading of model weights can be time consuming, the BaseRunner gives the developer an option to implement the `load_assets` method. The `load_assets` method is called during the instantiation of the Runner class in the Compox process and the attributes set in the `load_assets` will get cached together with the Runner instance. This will make repeated calls to the Runner class faster, because the model weights will not have to be loaded again as long as the cache is not invalidated.
+You can override `load_assets` to load model weights or other files once and cache them on the Runner instance. Use `self.fetch_asset(...)` to load files stored in the algorithm package. Paths are **relative to the Runner module root** (e.g., `files/weights.pt`). `fetch_asset` returns an `io.BytesIO` object that you can pass to libraries like `torch.load`.
 
-Any file present in the algorithm directory can be loaded in the `load_assets` method (other than .py files). The `load_assets` should receive a relative path to the file that should be loaded as an argument. A bytes object will be returned, which can be loaded e.g. using the the torch.load method in the case of PyTorch state dicts.
+Example:
 
-Example of loading a PyTorch state dict:
 ```python
-state_dict = self.fetch_asset("files/vit_b.pt")
-state_dict = torch.load(state_dict)
+state_dict_bytes = self.fetch_asset("files/vit_b.pt")
+state_dict = torch.load(state_dict_bytes)
 ```
 
-### The `log_message` method
-The log_message method can be used to log messages to Compox. The log_message method receives a message and a logging level as arguments. The logging level can be one of the following: "DEBUG", "INFO", "WARNING", "ERROR". The default logging level is "INFO".
+**Why this exists:** model weights and large resources are expensive to load, so Compox caches them on the Runner instance for reuse across requests. These attributes are locked to avoid unsafe mutation across threads.
 
-Example of logging a message:
+### The `log_message` method
+Log messages to Compox:
+
 ```python
 self.log_message("This is an info message.", logging_level="INFO")
 ```
 
 ### The `set_progress` method
-The set_progress method can be used to report the progress of the algorithm to Compox. The set_progress method receives a float value between 0 and 1 as an argument. The starting progress is automatically set to 0 and if the computation is done, or fails, the progress is automatically set to 1.
+Report execution progress (float between 0 and 1):
 
-Example of reporting the progress:
 ```python
 self.set_progress(0.5)
 ```
 
+### Sessions (optional)
+Executions can be associated with a `session_token` to reuse an in‑memory cache across runs. From a Runner perspective, this cache is accessed via:
+- `save_item_to_session(obj, key)`
+- `load_item_from_session(key)`
+- `remove_item_from_session(key)`
+
+**Why this exists:** some algorithms benefit from reusing expensive intermediates (e.g., feature caches, preprocessed inputs) across multiple executions without reloading from storage.
+
+Notes:
+- Sessions are **FastAPI background task only**. Celery mode does not support sessions.
+- Sessions are in‑memory (single process) and expire after a fixed timeout, so treat them as an optimization rather than persistent storage.
+- The client supplies `session_token` on execution requests; the server can also generate one when missing.
+
 ## The `pyproject.toml` file
-The `pyproject.toml` is a file that contains the algorithm metadata. This file is used by compox to properly deploy the algorithm as a service. The `pyproject.toml` file should be placed in the root directory of the algorithm.
+The `pyproject.toml` file contains algorithm metadata. It must be in the algorithm root.
 
 ### Mandatory fields
-
-The `pyproject.toml` file should contain the following fields mandatory fields:
 
 ```toml
 [project]
@@ -146,199 +165,146 @@ name = "algorithm_name"
 version = "major.minor.patch"
 ```
 
-Even though the following fields are not mandatory, it is recommended to include them in the `pyproject.toml` file to make the algorithm as user-friendly and compatible with compox as possible.
+**Why this exists:** Compox uses `name` + major version to identify an algorithm line and uses minor versions to track distinct builds.
 
-The algorithm type should be specified in the `tool.compox` section. The algorithm type is used to specify the general algorithm functionality. The algorithm type is used to determine the input and output data schemas, and the general algorithm behavior. The algorithm type is defined in the compox.algorithm_utils module.
+### Versioning behavior (AlgorithmDeployer)
+Compox derives versioning from the `[project]` version string in `pyproject.toml`:
+- **Major version** = the first segment (before the first dot)
+- **Minor version** = the second segment (between first and second dot)
+- **Patch version** is currently ignored by the deployer
 
-### Algorithm type, tags, and description
+When an algorithm is deployed, Compox searches the algorithm store for an existing record
+with the same **algorithm name** and **major version**. The behavior is:
+- **If found:** Compox compares the newly built module ID and assets dictionary with the
+  latest stored minor version. If either differs, it inserts a new **minor version** entry
+  and increments `latest_algorithm_minor_version`. If both are identical, it **does not**
+  insert a new minor version.
+- **If not found:** Compox creates a new algorithm record with `latest_algorithm_minor_version`
+  initialized from the `project.version` minor segment, and stores the module/assets under that.
+
+Notes:
+- The stored minor versions are not the original `pyproject.toml` patch version; only the
+  **major/minor** segments drive versioning.
+- Re-deploying the same algorithm with identical module and assets is a no‑op for minor
+  versions (no new entry is added).
+- If you change only non‑code assets, a new minor version is created because the assets
+  dictionary changes.
+
+**Why this exists:** this makes deployments deterministic and deduplicated; you can update assets or code without forcing a new algorithm identity while still keeping a history of builds.
+
+### Algorithm type, tags, description
 
 ```toml
 [tool.compox]
 algorithm_type = "AlgorithmType"
+tags = ["tag1", "tag2"]
+description = "This is a super cool algorithm."
+removable = false
+exportable = true
 ```
 
-Each algorithm type has a set of potential tags, which are used to specify the general algorithm functionality. Multiple tags can be provided for one algorithm. For image denoising algorithms, we will use the `image-denoising` tag. 
- 
-```toml
-tags = ["tag1", "tag2", "tag3", ...]
-```
+### Supported devices
+Supported devices are a list of strings: `"cpu"`, `"gpu"`, or `"mps"`. The `default_device` must be included in `supported_devices`, otherwise validation raises an error.
 
-The `description` field should contain a brief description of the algorithm.
-
-```toml
-description = "This is a super cool algorithm that does super cool things."
-```
-
-### Algorithm supported devices
-The server allows algorithms to be run on both CPU and GPU devices. The `supported_devices` field is used to specify which devices the algorithm supports. The `supported_devices` field should contain a list of strings, where each string specifies a device that the algorithm supports, ["cpu"], ["gpu"], or ["cpu", "gpu"]. Additionally, a `default_device` field must be specified, which specifies the default device that the algorithm will run on. The `default_device` field should be a string, either "cpu" or "gpu". Do not specify a `default_device` that's not included in the `supported_devices` list as this will cause a warning and the algorithm will run on the CPU by default.
-
-This setting will cause the algorithm to run on the CPU by default, but the user can override this setting in the execution request and run the algorithm on the GPU.
 ```toml
 supported_devices = ["cpu", "gpu"]
 default_device = "cpu"
 ```
 
 ### Additional parameters
+Additional parameters are a list of objects with `name`, `description`, and a `config` section.
+You can also provide an optional `displayed_name` for a more human-friendly UI label. If omitted,
+Compox derives it automatically from `name`.
 
-We can also specify additional parameters in the `additional_parameters` field. The `additional_parameters` field should contain a list of dictionaries, where each dictionary contains the parameter name, type, default value, and description. The `additional_parameters` field is optional, and can be omitted if the algorithm does not require any additional parameters.
+```toml
+additional_parameters = [
+  { name = "some_string_parameter", displayed_name = "Some string parameter", description = "This parameter strings.", config = { type = "string", default = "hello", adjustable = true } },
+  { name = "threshold", description = "Threshold used during inference.", config = { type = "float_range", default = 0.5, min = 0.0, max = 1.0, step = 0.05, decimal_precision = 2, adjustable = true } },
+]
+```
 
-Each additional parameter must contain the following fields:
-* `name`: The name of the parameter.
-* `description`: The description of the parameter. This field is used to describe the purpose of the parameter. It should be a short, human-readable description of the parameter that can be displayed by the client application as a tooltip or help text.
-* `config`: The configuration of parameter `type`, `default`, and `adjustable`. The `type` field specifies the type of the parameter. The `default` field specifies the default value of the parameter. The `adjustable` field specifies whether the parameter can be adjusted by the user. If set to `true`, the parameter can be adjusted by the user. If set to `false`, the parameter is to be specified from within the client application without exposing it to the user.
-
-The following parameter types and configuration fields are supported:
+Parameter types:
 
 | Parameter type | Configuration fields |
 | --- | --- |
 | string | type, default, adjustable |
 | int | type, default, adjustable |
-| float | type, default, adjustable |
+| float | type, default, adjustable, decimal_precision(optional) |
 | bool | type, default, adjustable |
 | int_range | type, default, min, max, step, adjustable |
-| float_range | type, default, min, max, step, adjustable |
+| float_range | type, default, min, max, step, adjustable, decimal_precision(optional) |
 | string_enum | type, default, options, adjustable |
 | int_enum | type, default, options, adjustable |
-| float_enum | type, default, options, adjustable |
-| string_list | type, default, adjustable |
-| int_list | type, default, adjustable |
-| float_list | type, default, adjustable |
-| bool_list | type, default, adjustable |
+| float_enum | type, default, options, adjustable, decimal_precision(optional) |
+| string_list | type, default, options, adjustable |
+| int_list | type, default, options, adjustable |
+| float_list | type, default, options, adjustable, decimal_precision(optional) |
+| bool_list | type, default, options, adjustable |
 
-Here you can see an example of how to define additional parameters in the `pyproject.toml` file:
+Notes:
+- `displayed_name` is optional. If not provided, Compox generates one from `name` by replacing `_` and `-` with spaces and capitalizing the result.
+- `decimal_precision` is optional and only valid for float-based parameter types.
+- `decimal_precision` must be greater than or equal to `0`.
 
-To define an user-adjustable `string` parameter, use the following configuration:
+### Training parameters
+Training parameters use the same schema as additional parameters:
 
 ```toml
-additional_parameters = [
-    {name = "some_string_parameter", description = "This parameter strings.", config = {type = "string", default = "hello", adjustable = true}},
+training_parameters = [
+  { name = "epochs", displayed_name = "Epochs", description = "Training epochs.", config = { type = "int", default = 10, adjustable = true } },
 ]
-```
-
-To define an user-adjustable `int` parameter, use the following configuration:
-
-```toml
-{name = "some_int_parameter", description = "This paramete ints.", config = {type = "int", default = 42, adjustable = true}},
-```
-
-To define an user-adjustable `float` parameter, use the following configuration:
-
-```toml
-{name = "some_float_parameter", description = "This parameter floats.", config = {type = "float", default = 3.14, adjustable = true}},
-```
-
-To define an user-adjustable `bool` parameter, use the following configuration:
-
-```toml
-{name = "some_bool_parameter", description = "This parameter bools.", config = {type = "bool", default = true, adjustable = true}},
-```
-
-To define an user-adjustable `int_range` parameter, use the following configuration:
-
-```toml
-{name = "some_int_range_parameter", description = "This parameter ranges ints.", config = {type = "int_range", default = 42, min = 0, max = 100, step = 1, adjustable = true}},
-```
-
-To define an user-adjustable `float_range` parameter, use the following configuration:
-
-```toml
-{name = "some_float_range_parameter", description = "This parameter ranges floats.", config = {type = "float_range", default = 3.14, min = 0.0, max = 10.0, step = 0.1, adjustable = true}},
-```
-
-To define an user-adjustable `string_enum` parameter, use the following configuration:
-
-```toml
-{name = "some_string_enum_parameter", description = "This parameter enums strings.", config = {type = "string_enum", default = "hello", options = ["hello", "world"], adjustable = true}},
-```
-
-To define an user-adjustable `int_enum` parameter, use the following configuration:
-
-```toml
-{name = "some_int_enum_parameter", description = "This parameter enums ints.", config = {type = "int_enum", default = 42, options = [42, 43, 44], adjustable = true}},
-```
-
-To define an user-adjustable `float_enum` parameter, use the following configuration:
-
-```toml
-{name = "some_float_enum_parameter", description = "This parameter enums floats.", config = {type = "float_enum", default = 3.14, options = [3.14, 3.15, 3.16], adjustable = true}},
-```
-
-To define an user-adjustable `string_list` parameter, use the following configuration:
-
-```toml
-{name = "some_string_list_parameter", description = "This parameter lists strings.", config = {type = "string_list", default = ["hello", "world"], adjustable = true}},
-```
-
-To define an user-adjustable `int_list` parameter, use the following configuration:
-
-```toml
-{name = "some_int_list_parameter", description = "This parameter lists ints.", config = {type = "int_list", default = [42, 43, 44], adjustable = true}},
-```
-
-To define an user-adjustable `float_list` parameter, use the following configuration:
-
-```toml
-{name = "some_float_list_parameter", description = "This parameter lists floats.", config = {type = "float_list", default = [3.14, 3.15, 3.16], adjustable = true}},
-```
-
-To define an user-adjustable `bool_list` parameter, use the following configuration:
-
-```toml
-{name = "some_bool_list_parameter", description = "This parameter lists bools.", config = {type = "bool_list", default = [true, false, true], adjustable = true}},
 ```
 
 ### Other fields
 
-The `check_importable` field is used to check if the algorithm can be imported. If set to `true`, compox will check if the algorithm can be imported before deploying it as a service.
-
 ```toml
 check_importable = false
-```
-
-The `obfuscate` field is used to obfuscate the algorithm code. If set to `true`, compox will obfuscate the algorithm code before deploying it as a service. The obfuscation is currently implemented as minimization of the code. It is recommended to set this field to `true` to reasonably protect the algorithm code.
-
-```toml
 obfuscate = true
+hash_module = true (deprecated; ignored, deduplication is always on)
+hash_assets = true  (deprecated; ignored, deduplication is always on)
+removable = false
+exportable = true
 ```
 
-You can use the `hash_module` and `hash_assets` fields to check if the algorithm module or assets have already been deployed. If they have been deployed, compox will not redeploy them, but reuse them for the current algorithm deployment. This can reduce the deployment time and the amount of data that needs to be stored.
-
-```toml
-hash_module = true
-hash_assets = true
-```
+**Why these exist:**
+- `check_importable` helps catch packaging mistakes early.
+- `obfuscate` reduces casual code exposure in stored modules.
+- (deprecated) `hash_module` and `hash_assets` are ignored. Deduplication by content hash is always enabled.
+- `removable` controls whether the deploy delete endpoint is allowed to remove this algorithm (defaults to false).
+- `exportable` controls whether the export endpoint can package this algorithm (defaults to true). If false, export returns HTTP 403.
 
 ## The `files` directory
-The files directory is an optional component of the algorithm module. It should contain any files that the algorithm needs to run. The files directory can contain any type of file, such as images, text files, etc. The files directory can be accessed by calling the `self.fetch_asset` method from anywhere in the Runner class. The `fetch_asset` method receives a relative path to the file that should be fetched as an argument. A bytes object will be returned, which can be used to load the file.
+Optional. Store data assets your algorithm needs at runtime. Load them via `self.fetch_asset(...)`.
+
+**Why this exists:** code is zipped and cached separately from assets, so non‑Python files are stored and retrieved from the asset store by path.
 
 ## The `some_internal_submodule` directory
-The some_internal_submodule directory is an optional component of the algorithm module. It should contain any internal submodules that the algorithm needs to run. The some_internal_submodule directory can contain any number of Python files. The some_internal_submodule directory can be accessed by importing the submodule from the Runner class. Note that the submodule will be deployed together with the algorithm, so it should not contain any sensitive information (even though the submodule is not accessible from the outside and there is an option to obfuscate the code).
+Optional. Include internal modules used by your Runner.
 
-
+**Why this exists:** any Python modules inside the algorithm directory are packaged into the module zip, so you can keep helper code alongside your Runner.
 # Example of a dummy algorithm
-
-The file structure should look like this (this is just an untested example):
 
 ```plaintext
 algorithm_name/
-    ├── __init__.py
-    ├── Runner.py
-    ├── pyproject.toml
-    └── files/
-        ├── some_heavy_model.pt
-    └── my_big_model/
-        ├── __init__.py
-        ├── utils.py
+    |-- __init__.py
+    |-- Runner.py
+    |-- pyproject.toml
+    |-- files/
+    |   `-- some_heavy_model.pt
+    `-- my_big_model/
+        |-- __init__.py
+        `-- utils.py
 ```
 
-The Runner.py file should look like this:
+Runner example:
 
 ```python
 from my_big_model.utils import MyBigModel
-from algorithms.BaseRunner import BaseRunner
-from algorithms.io_schemas import MyDataSchema, MyOutputSchema
+from compox.algorithm_utils.BaseRunner import BaseRunner
+from compox.algorithm_utils.io_schemas import ImageSchema, SegmentationSchema
 import numpy as np
 import torch
+
 class Runner(BaseRunner):
     """
     The runner class for the foo algorithm.
@@ -350,86 +316,36 @@ class Runner(BaseRunner):
         """
         some_model = MyBigModel()
         self.log_message("Loading the Foo assets.")
-        some_big_state_dict = self.fetch_asset("files/some_heavy_model.pt")¨
-        some_big_state_dict = torch.load(some_big_state_dict)
-        some_model.load_state_dict(some_big_state_dict)
+        state_dict_bytes = self.fetch_asset("files/some_heavy_model.pt")
+        state_dict = torch.load(state_dict_bytes)
+        some_model.load_state_dict(state_dict)
         self.my_big_model = some_model
 
-
-    def preprocess(self, input_data: dict, args: dict = {}) -> np.ndarray:
-        """Preprocess the request data before feeding into model for inference.
-
-        Parameters
-        ----------
-        input_data : ImageSchema
-            The input data.
-        args : dict, optional
-            The arguments, by default None
-
-        Returns
-        -------
-        tuple
-            The preprocessed data.
-        """
+    def preprocess(self, input_data: dict, args: dict | None = None) -> np.ndarray:
         self.log_message("Preprocessing the Foo input data.")
-        my_data = self.fetch_data(input_data["input_dataset_ids"], MyDataSchema)
-        input_data = np.array(my_data[0])
-        return input_data
+        my_data = self.fetch_data(input_data["input_dataset_ids"], ImageSchema)
+        input_array = np.array(my_data[0]["image"])
+        return input_array
 
-    def inference(self, data: np.ndarray,  args: dict = {}) -> torch.tensor:
-        """Run the inference on the preprocessed data.
-
-        Parameters
-        ----------
-        data : np.ndarray
-            The preprocessed data.
-        args : dict, optional
-            The arguments, by default None
-
-
-        Returns
-        -------
-        torch.tensor
-            The inference output.
-        """
-
+    def inference(self, data: np.ndarray, args: dict | None = None) -> torch.Tensor:
         self.log_message("Running the Foo inference.")
-
         some_user_defined_args = args.get("some_user_defined_args", None)
         if some_user_defined_args is not None:
             self.log_message(f"User defined args: {some_user_defined_args}")
-        output = self.my_big_model(input_data, some_user_defined_args)
+        output = self.my_big_model(data, some_user_defined_args)
         self.set_progress(0.5)
         self.log_message("The Foo inference is done.")
         return output
 
-    def postprocess(self, inference_output: torch.tensor, args: dict = {}) -> list[str]:
-        """Postprocess the inference output.
-
-        Parameters
-        ----------
-        inference_output : dict
-            The inference output.
-        args : dict, optional
-            The arguments, by default None
-
-        Returns
-        -------
-        list[str]
-            The output dataset ids.
-        """
-
+    def postprocess(self, inference_output: torch.Tensor, args: dict | None = None) -> list[str]:
         self.log_message("Postprocessing the Foo output.")
         output = inference_output.detach().numpy()
-        output = [
-            {
-                "output": output
-            }
-        ]
-        output_dataset_ids = self.post_data(output, MyOutputSchema)
+        output_dicts = [{"mask": output}]
+        output_dataset_ids = self.post_data(output_dicts, SegmentationSchema)
         return output_dataset_ids
 ```
-The pyproject.toml file should look like this:
+
+pyproject.toml example:
 
 ```toml
 [project]
@@ -441,7 +357,7 @@ algorithm_type = "Generic"
 tags = ["foo", "bar"]
 description = "This algorithm does foo and bar."
 additional_parameters = [
-    {name = "some_user_defined_args", type = "str", default = "hello", description = "This is a user defined argument."},
+  { name = "some_user_defined_args", description = "This is a user defined argument.", config = { type = "string", default = "hello", adjustable = true } },
 ]
 check_importable = false
 obfuscate = true

@@ -22,6 +22,10 @@ class S3Connection(BaseConnection):
     the BaseConnection class and implements the methods for interacting with an S3
     object storage database.
 
+    NOTE: All lifecycle policies are initialized at bucket creation time, this means
+    that changing the expiration days in the S3Connection instance after the bucket
+    creation will NOT update the lifecycle policies of already existing buckets.
+
     Parameters
     ----------
     endpoint_url : str
@@ -35,8 +39,20 @@ class S3Connection(BaseConnection):
     data_store_expire_days : int
         The number of days after which the objects in the data-store bucket
         expire. Default is 1.
+    execution_store_expire_days : int
+        The number of days after which the objects in the execution-store bucket
+        expire. Default is 30.
+    training_store_expire_days : int
+        The number of days after which the objects in the training-store bucket
+        expire. Default is 30.
+    deploy_store_expire_days : int
+        The number of days after which the objects in the deploy-store bucket
+        expire. Default is 30.
+    stop_requests_expire_days : int
+        The number of days after which the objects in the stop-requests bucket
+        expire. Default is 7.
     collection_prefix : str
-        The prefix for the actual bucket names. The bucket names are constructed 
+        The prefix for the actual bucket names. The bucket names are constructed
         as {collection_prefix}{collection_name}. Default is an empty string.
     """
 
@@ -47,6 +63,10 @@ class S3Connection(BaseConnection):
         aws_secret_access_key: str,
         region_name: str | None = None,
         data_store_expire_days: int = 1,
+        execution_store_expire_days: int = 30,
+        training_store_expire_days: int = 30,
+        deploy_store_expire_days: int = 30,
+        stop_requests_expire_days: int = 7,
         collection_prefix: str = "",
     ):
 
@@ -76,7 +96,13 @@ class S3Connection(BaseConnection):
         self.post_data_retries = 5
         self.uploader = S3FileUploader(self.s3_client)
         self.data_store_expire_days = data_store_expire_days
-        self.collection_prefix = f"{collection_prefix}" if collection_prefix else ""
+        self.execution_store_expire_days = execution_store_expire_days
+        self.training_store_expire_days = training_store_expire_days
+        self.deploy_store_expire_days = deploy_store_expire_days
+        self.stop_requests_expire_days = stop_requests_expire_days
+        self.collection_prefix = (
+            f"{collection_prefix}" if collection_prefix else ""
+        )
 
     def list_collections(self) -> list:
         """
@@ -87,7 +113,10 @@ class S3Connection(BaseConnection):
         list
             The list of collections.
         """
-        return [bucket.name.replace(self.collection_prefix, "") for bucket in self.s3.buckets.all()]
+        return [
+            bucket.name.replace(self.collection_prefix, "")
+            for bucket in self.s3.buckets.all()
+        ]
 
     def check_collections_exists(
         self, collection_names: list[str]
@@ -120,7 +149,9 @@ class S3Connection(BaseConnection):
             The collection names.
         """
         for collection_name in collection_names:
-            bucket = self.s3.Bucket(f"{self.collection_prefix}{collection_name}")
+            bucket = self.s3.Bucket(
+                f"{self.collection_prefix}{collection_name}"
+            )
             for key in bucket.objects.all():
                 key.delete()
             bucket.delete()
@@ -137,22 +168,94 @@ class S3Connection(BaseConnection):
         for collection_name in collection_names:
             if self.region_name:
                 self.s3.create_bucket(
-                    Bucket=f"{self.collection_prefix}{collection_name}", 
-                    CreateBucketConfiguration={'LocationConstraint': self.region_name}
-                    )
+                    Bucket=f"{self.collection_prefix}{collection_name}",
+                    CreateBucketConfiguration={
+                        "LocationConstraint": self.region_name
+                    },
+                )
             else:
                 self.s3.create_bucket(
                     Bucket=f"{self.collection_prefix}{collection_name}"
-                    )
+                )
 
             if collection_name == "data-store":
                 lifecycle_policy = {
                     "Rules": [
                         {
-                            "ID": "Delete objects after 24 hours",
-                            "Filter": {"Prefix": ""},  # Apply to all objects
+                            "ID": "Delete objects after expiration days",
+                            "Filter": {
+                                "Tag": {"Key": "training_ref", "Value": "0"}
+                            },
                             "Status": "Enabled",
                             "Expiration": {"Days": self.data_store_expire_days},
+                        }
+                    ]
+                }
+                self.s3_client.put_bucket_lifecycle_configuration(
+                    Bucket=f"{self.collection_prefix}{collection_name}",
+                    LifecycleConfiguration=lifecycle_policy,
+                )
+            elif collection_name == "execution-store":
+                lifecycle_policy = {
+                    "Rules": [
+                        {
+                            "ID": "Delete objects after expiration days",
+                            "Filter": {"Prefix": ""},  # applies to all objects
+                            "Status": "Enabled",
+                            "Expiration": {
+                                "Days": self.execution_store_expire_days
+                            },
+                        }
+                    ]
+                }
+                self.s3_client.put_bucket_lifecycle_configuration(
+                    Bucket=f"{self.collection_prefix}{collection_name}",
+                    LifecycleConfiguration=lifecycle_policy,
+                )
+            elif collection_name == "training-store":
+                lifecycle_policy = {
+                    "Rules": [
+                        {
+                            "ID": "Delete objects after expiration days",
+                            "Filter": {"Prefix": ""},  # applies to all objects
+                            "Status": "Enabled",
+                            "Expiration": {
+                                "Days": self.training_store_expire_days
+                            },
+                        }
+                    ]
+                }
+                self.s3_client.put_bucket_lifecycle_configuration(
+                    Bucket=f"{self.collection_prefix}{collection_name}",
+                    LifecycleConfiguration=lifecycle_policy,
+                )
+            elif collection_name == "deploy-store":
+                lifecycle_policy = {
+                    "Rules": [
+                        {
+                            "ID": "Delete objects after expiration days",
+                            "Filter": {"Prefix": ""},  # applies to all objects
+                            "Status": "Enabled",
+                            "Expiration": {
+                                "Days": self.deploy_store_expire_days
+                            },
+                        }
+                    ]
+                }
+                self.s3_client.put_bucket_lifecycle_configuration(
+                    Bucket=f"{self.collection_prefix}{collection_name}",
+                    LifecycleConfiguration=lifecycle_policy,
+                )
+            elif collection_name == "stop-requests":
+                lifecycle_policy = {
+                    "Rules": [
+                        {
+                            "ID": "Delete objects after expiration days",
+                            "Filter": {"Prefix": ""},  # applies to all objects
+                            "Status": "Enabled",
+                            "Expiration": {
+                                "Days": self.stop_requests_expire_days
+                            },
                         }
                     ]
                 }
@@ -207,9 +310,8 @@ class S3Connection(BaseConnection):
         for object_key in object_names:
             try:
                 self.s3.Object(
-                    f"{self.collection_prefix}{collection_name}", 
-                    object_key
-                    ).load()
+                    f"{self.collection_prefix}{collection_name}", object_key
+                ).load()
                 object_exists.append(True)
             except Exception as _:
                 object_exists.append(False)
@@ -231,9 +333,8 @@ class S3Connection(BaseConnection):
         """
         for object_key in object_names:
             self.s3.Object(
-                f"{self.collection_prefix}{collection_name}", 
-                object_key
-                ).delete()
+                f"{self.collection_prefix}{collection_name}", object_key
+            ).delete()
 
     def get_objects(
         self, collection_name: str, object_names: list[str]
@@ -256,14 +357,16 @@ class S3Connection(BaseConnection):
         objects = []
         for object_key in object_names:
             obj = self.s3.Object(
-                f"{self.collection_prefix}{collection_name}", 
-                object_key
-                )
+                f"{self.collection_prefix}{collection_name}", object_key
+            )
             objects.append(obj.get()["Body"].read())
         return objects
 
     def put_objects(
-        self, collection_name: str, object_names: list[str], object: list[bytes] | list[str]
+        self,
+        collection_name: str,
+        object_names: list[str],
+        object: list[bytes] | list[str],
     ) -> None:
         """
         Puts objects into a collection.
@@ -311,10 +414,15 @@ class S3Connection(BaseConnection):
             else:
                 # if the object is larger than the chunk size, upload it in parts
                 self.uploader.upload_file_multipart(
-                    object[i], 
-                    object_names[i], 
-                    f"{self.collection_prefix}{collection_name}"
+                    object[i],
+                    object_names[i],
+                    f"{self.collection_prefix}{collection_name}",
                 )
+            if collection_name == "data-store":
+                tags = self.get_object_tags(collection_name, object_names[i])
+                if tags.get("training_ref") is None:
+                    tags["training_ref"] = "0"
+                    self.put_object_tags(collection_name, object_names[i], tags)
 
     def put_objects_with_duplicity_check(
         self, collection_name: str, object_names: list[str], object: list[bytes]
@@ -343,7 +451,9 @@ class S3Connection(BaseConnection):
 
             # get all etags of the objects in the bucket
             paginator = self.s3_client.get_paginator("list_objects")
-            page_iterator = paginator.paginate(Bucket=f"{self.collection_prefix}{collection_name}")
+            page_iterator = paginator.paginate(
+                Bucket=f"{self.collection_prefix}{collection_name}"
+            )
             etags = []
             keys = []
             for page in page_iterator:
@@ -364,16 +474,15 @@ class S3Connection(BaseConnection):
             else:
                 # if etag does not exist, upload the object
                 self.uploader.upload_file_multipart(
-                    object[i], 
-                    object_names[i], 
-                    f"{self.collection_prefix}{collection_name}"
+                    object[i],
+                    object_names[i],
+                    f"{self.collection_prefix}{collection_name}",
                 )
 
         return object_names
 
-
     def get_presigned_download_url(
-        self, collection_name: str, object_name: str, expiration: int =3600
+        self, collection_name: str, object_name: str, expiration: int = 3600
     ) -> str:
         """
         Generate a presigned URL for downloading an object.
@@ -393,12 +502,11 @@ class S3Connection(BaseConnection):
             A presigned URL that can be used to download the object.
         """
         return self.generate_presigned_url(
-            'get_object', collection_name, object_name, expiration
+            "get_object", collection_name, object_name, expiration
         )
-    
 
     def get_presigned_upload_url(
-        self, collection_name: str, object_name: str, expiration: int =3600
+        self, collection_name: str, object_name: str, expiration: int = 3600
     ) -> str:
         """
         Generate a presigned URL for uploading an object.
@@ -418,12 +526,15 @@ class S3Connection(BaseConnection):
             A presigned URL that can be used to upload the object.
         """
         return self.generate_presigned_url(
-            'put_object', collection_name, object_name, expiration
+            "put_object", collection_name, object_name, expiration
         )
 
-
     def generate_presigned_url(
-        self, client_method: str, collection_name: str, object_name: str, expiration: int =3600
+        self,
+        client_method: str,
+        collection_name: str,
+        object_name: str,
+        expiration: int = 3600,
     ) -> str:
         """
         Generate a generic presigned URL.
@@ -446,7 +557,28 @@ class S3Connection(BaseConnection):
         """
         return self.s3_client.generate_presigned_url(
             client_method,
-            Params={'Bucket': f"{self.collection_prefix}{collection_name}",
-                    'Key': object_name},
-            ExpiresIn=expiration
+            Params={
+                "Bucket": f"{self.collection_prefix}{collection_name}",
+                "Key": object_name,
+            },
+            ExpiresIn=expiration,
+        )
+
+    def get_object_tags(
+        self, collection_name: str, object_name: str
+    ) -> dict[str, str]:
+        resp = self.s3_client.get_object_tagging(
+            Bucket=f"{self.collection_prefix}{collection_name}",
+            Key=object_name,
+        )
+        return {tag["Key"]: tag["Value"] for tag in resp.get("TagSet", [])}
+
+    def put_object_tags(
+        self, collection_name: str, object_name: str, tags: dict[str, str]
+    ) -> None:
+        tagset = [{"Key": k, "Value": str(v)} for k, v in tags.items()]
+        self.s3_client.put_object_tagging(
+            Bucket=f"{self.collection_prefix}{collection_name}",
+            Key=object_name,
+            Tagging={"TagSet": tagset},
         )

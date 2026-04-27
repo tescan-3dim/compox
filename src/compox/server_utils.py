@@ -15,16 +15,19 @@ import subprocess
 import importlib.util
 import re
 import io
+import signal
 from collections import deque
 from functools import partial
+from contextlib import contextmanager
+from typing import TYPE_CHECKING, Any
 
 from compox.database_connection import BaseConnection
 
-if os.name == "nt":
-    from compox.internal import JobPOpen
+if TYPE_CHECKING:
+    from compox.internal.JobPOpen import JobPOpen
 
 
-def check_system_gpu_availability() -> tuple[bool|None, int|None]:
+def check_system_gpu_availability() -> tuple[bool | None, int | None]:
     """
     Check if system has GPU support.
 
@@ -48,7 +51,9 @@ def check_system_gpu_availability() -> tuple[bool|None, int|None]:
         )
         result, error = process.communicate()
         if process.returncode:
-            raise RuntimeError(f'Calling nvidia-smi failed with error: {error}!')
+            raise RuntimeError(
+                f"Calling nvidia-smi failed with error: {error}!"
+            )
         devices = []
         for line in result.strip().split("\n"):
             index, name, memory = re.split(r",\s*", line)
@@ -158,7 +163,7 @@ def calculate_s3_etag(bytes_obj: io.BytesIO) -> str:
 def find_algorithm_by_id(
     algorithm_id: str,
     bucket_contents: list[dict],
-    separator: str ="~",
+    separator: str = "~",
 ) -> tuple:
     """
     Find an algorithm by its id.
@@ -182,14 +187,24 @@ def find_algorithm_by_id(
     found_model_major_version = None
     found_model_minor_version = -1
     for key in bucket_contents:
-        (
-            bucket_model_id,
-            bucket_model_name,
-            bucket_model_major_version,
-            bucket_model_minor_version,
-        ) = key["Key"].split(separator)
+        if isinstance(key, dict) and "Key" in key.keys():
+            key = str(key["Key"])
+
+        split_algorithm_key = key.split(separator)
+
+        if len(split_algorithm_key) == 3:
+            bucket_model_id = split_algorithm_key[0]
+            bucket_model_name = split_algorithm_key[1]
+            bucket_model_major_version = split_algorithm_key[2]
+            bucket_model_minor_version = 0
+
+        elif len(split_algorithm_key) == 4:
+            bucket_model_id = split_algorithm_key[0]
+            bucket_model_name = split_algorithm_key[1]
+            bucket_model_major_version = split_algorithm_key[2]
+            bucket_model_minor_version = split_algorithm_key[3]
         if bucket_model_id == algorithm_id:
-            found_model_key = key["Key"]
+            found_model_key = key
             found_model_id = bucket_model_id
             found_model_name = bucket_model_name
             found_model_major_version = int(bucket_model_major_version)
@@ -382,7 +397,7 @@ def check_and_create_database_collections(
     return not_existing_collections
 
 
-def get_subprocess_fn():
+def get_subprocess_fn() -> partial["JobPOpen"] | Any:
     """
     Get the subprocess function appropriate for the current operating system.
 
@@ -408,3 +423,45 @@ def get_subprocess_fn():
         raise ValueError(f"Unsupported OS: {os.name}")
 
     return subprocess_fn
+
+
+@contextmanager
+def _systray_signal_shutdown(server, systray_interface, shutdown_event=None):
+    """
+    Bridge terminal signals to systray/server shutdown so Ctrl+C and SIGTERM
+    terminate cleanly even when the systray loop is active.
+    """
+    previous_handlers = {}
+
+    def _request_shutdown(signum, frame):
+        server.logger.info(
+            f"Received signal {signum}; requesting server and systray shutdown."
+        )
+        server.should_exit = True
+        if shutdown_event is not None:
+            shutdown_event.set()
+        try:
+            systray_interface.stop()
+        except Exception:
+            # Ignore tray stop errors; server shutdown is the priority.
+            pass
+
+    for signal_name in ("SIGINT", "SIGTERM"):
+        signal_type = getattr(signal, signal_name, None)
+        if signal_type is None:
+            continue
+        try:
+            previous_handlers[signal_type] = signal.getsignal(signal_type)
+            signal.signal(signal_type, _request_shutdown)
+        except (ValueError, OSError, RuntimeError):
+            # Some environments prevent setting process-wide signal handlers.
+            continue
+
+    try:
+        yield
+    finally:
+        for signal_type, previous_handler in previous_handlers.items():
+            try:
+                signal.signal(signal_type, previous_handler)
+            except (ValueError, OSError, RuntimeError):
+                continue

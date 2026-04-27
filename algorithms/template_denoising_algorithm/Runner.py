@@ -22,7 +22,9 @@ class Runner(Image2ImageRunner):
         """
         pass
 
-    def inference(self, data: np.ndarray, args: dict = {}) -> np.ndarray:
+    def inference(
+        self, data: np.ndarray, args: dict | None = None
+    ) -> np.ndarray:
         """
         Run the inference.
 

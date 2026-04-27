@@ -46,10 +46,10 @@ The `description` field should contain a brief description of the algorithm.
 description = "Generates homography matrices for aligning a sequence of images."
 ```
 
-Here we will add a `max_translation` parameter that defines the maximum translation as a fraction of the image size. Because we want to set a range for the parameter, we will use the `float_range` type. The `default` field should contain the default value of the parameter. The `min` and `max` fields should contain the minimum and maximum values of the parameter. The `step` field should contain the step size of the parameter. The `adjustable` field should be set to `true` if we want to expose the parameter to the user to adjust.
+Here we will add a `max_translation` parameter that defines the maximum translation as a fraction of the image size. Because we want to set a range for the parameter, we will use the `float_range` type. The `displayed_name` field provides a human-friendly UI label. The `default` field should contain the default value of the parameter. The `min` and `max` fields should contain the minimum and maximum values of the parameter. The `step` field should contain the step size of the parameter. The `decimal_precision` field controls how many decimal places the UI should display for float-based values. The `adjustable` field should be set to `true` if we want to expose the parameter to the user to adjust.
 
 ```toml
- {name = "max_translation", description = "Maximum translation as a fraction of the image size.", config = {type = "float_range", default = 0.25, min = 0.0, max = 1.0, step = 0.05, adjustable = true}}
+ {name = "max_translation", displayed_name = "Max translation", description = "Maximum translation as a fraction of the image size.", config = {type = "float_range", default = 0.25, min = 0.0, max = 1.0, step = 0.05, decimal_precision = 2, adjustable = true}}
 ```
 
 To see more information about the possible parameter types see the [How to create an algorithm module](../README.md/#additional-parameters) section. 
@@ -134,7 +134,7 @@ def load_assets(self):
 Next, we can implement the `inference` method, where we perform the registration of the images. The data will be passed to the `inference` method as a numpy array. The `inference` method return a list of homography matrices represented by numpy arrays. You can also report the progress of the algorithm by calling the `set_progress` method. The `set_progress` method takes a float value between 0 and 1, where 0 is the start of the algorithm and 1 is the end of the algorithm. The `log_message` method can be used to log messages to the compox log.
 
 ```python
-def inference(self, data: np.ndarray, args: dict = {}) -> list[np.ndarray]:
+def inference(self, data: np.ndarray, args: dict | None = None) -> list[np.ndarray]:
     """
     Run the inference.
 
@@ -169,4 +169,12 @@ To customize the behavior of fetching and processing the input data, and postpro
 
 ## Deploying the algorithm
 
-To deploy the finished algorithm, you can use the `pdm run deployment template_registration_algorithm` command. This command will deploy the algorithm to the compox. The algorithm can also be added through compox systray interface by clicking the "Add Algorithm" button and selecting the algorithm directory.
+To deploy the finished algorithm, use:
+
+```bash
+compox deploy-algorithms --config app_server.yaml --name template_registration_algorithm
+```
+
+This deploys the algorithm to Compox. The algorithm can also be added through
+the Compox systray interface by clicking `Add Algorithm` and selecting the
+algorithm directory.

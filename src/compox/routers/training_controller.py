@@ -1,0 +1,272 @@
+"""
+Copyright 2025 TESCAN 3DIM, s.r.o.
+All rights reserved
+"""
+
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
+import json
+from datetime import datetime
+from compox.pydantic_models import (
+    TrainingRecord,
+    TrainingResponse,
+    IncomingTrainingRequest,
+    ResponseMessage,
+)
+from compox.server_utils import generate_uuid, find_algorithm_by_id
+from compox.training.TrainingSample import TrainingSample
+from compox.tasks.StopRequest import StopRequest
+
+STOPPABLE_STATES = {"PENDING", "RUNNING", "STARTED"}
+TERMINAL_STATES = {"STOPPED", "FAILED", "COMPLETED"}
+
+router = APIRouter(prefix="/api", tags=["training-controller"])
+
+
+# post training request to torchserve
+@router.post(
+    "/v0/train-algorithm",
+    summary="Trains an algorithm on sample(s)",
+    response_model=TrainingResponse,
+    responses={
+        500: {"model": ResponseMessage},
+        404: {"model": ResponseMessage},
+    },
+)
+def train_algorithm(
+    request: Request,
+    incoming_training_request: IncomingTrainingRequest,
+):
+    """
+    Executes a training of an algorithm on sample(s).
+
+    Parameters
+    ----------
+    request : Request
+        The request.
+    incoming_training_request : IncomingTrainingRequest
+        The incoming training request.
+
+    Returns
+    -------
+    TrainingResponse
+        The training response.
+    """
+    algorithm_collection_name = "algorithm-store"
+    sample_collection_name = "sample-store"
+    training_collection_name = "training-store"
+
+    training_id = generate_uuid()
+    database_connection = request.app.state.database_connection
+    settings = request.app.state.settings
+
+    # check if input samples are valid
+    samples_exist = database_connection.check_objects_exist(
+        sample_collection_name, incoming_training_request.training_data
+    )
+    if False in samples_exist:
+        not_found_samples = [
+            incoming_training_request.training_data[i]
+            for i in range(len(samples_exist))
+            if not samples_exist[i]
+        ]
+        return JSONResponse(
+            status_code=404,
+            content={
+                "detail": "Input samples with the following identifiers not found: {}".format(
+                    "\n".join(not_found_samples)
+                )
+            },
+        )
+
+    # check whether files associated with samples are present
+    not_found_files = []
+    for sample_id in incoming_training_request.training_data:
+        sample = TrainingSample(
+            database_connection,
+            sample_id=sample_id,
+        )
+        _, missing_files = sample._validate_files_exist()
+        not_found_files.extend(missing_files)
+
+    if len(not_found_files) > 0:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "detail": "Files (associated with input sample) with the following identifiers not found: {}".format(
+                    "\n".join(not_found_files)
+                )
+            },
+        )
+
+    # check if algorithm exists and get its JSON
+    algorithm_key, _, _, _, _ = find_algorithm_by_id(
+        incoming_training_request.algorithm_id,
+        database_connection.list_objects(algorithm_collection_name),
+    )
+
+    if algorithm_key is None:
+        return JSONResponse(
+            status_code=404,
+            content={"detail": "Algorithm not found"},
+        )
+    # create a new algorithm id for the trained algorithm
+
+    training_record = TrainingRecord(
+        training_id=training_id,
+        algorithm_id=incoming_training_request.algorithm_id,
+        status="PENDING",
+        checkpoint_id=incoming_training_request.checkpoint_id,
+        algorithm_minor_version=incoming_training_request.algorithm_minor_version,
+        tags=incoming_training_request.tags,
+        progress=0.0,
+        time_started=str(datetime.now()),
+        time_completed=None,
+        log="",
+        training_data=incoming_training_request.training_data,
+        additional_parameters=incoming_training_request.additional_parameters,
+        state={},
+        output_checkpoint_ids=[],
+    )
+    try:
+        database_connection.put_objects(
+            training_collection_name,
+            [training_id],
+            [json.dumps(training_record.model_dump())],
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"Failed to save training record: {e}"},
+        )
+
+    if settings.inference.backend_settings.executor == "celery":
+        request.app.state.executor.send_task(
+            "training_task",
+            args=[
+                json.dumps(training_record.model_dump()),
+            ],
+            task_id=training_id,
+            retries=2,
+        )
+
+    elif (
+        settings.inference.backend_settings.executor
+        == "fastapi_background_tasks"
+    ):
+        from compox.training.training_task_fastapi import (
+            training_task_fastapi,
+        )
+
+        request.app.state.executor.submit(
+            training_task_fastapi,
+            database_connection=database_connection,
+            training_record=training_record,
+        )
+
+    return TrainingResponse(training_id=training_id)
+
+
+@router.get(
+    "/v0/training/{training_id}",
+    summary="Get training record by id",
+    response_model=TrainingRecord,
+    responses={
+        500: {"model": ResponseMessage},
+        404: {"model": ResponseMessage},
+    },
+)
+async def get_training_record(training_id: str, request: Request):
+    """
+    Get training record by id.
+
+    Parameters
+    ----------
+    training_id : str
+        The id of the training record.
+
+    Returns
+    -------
+    TrainingRecord
+        The training record.
+    """
+    training_collection_name = "training-store"
+    database_connection = request.app.state.database_connection
+    try:
+        object_exists = database_connection.check_objects_exist(
+            training_collection_name, [training_id]
+        )[0]
+        if not object_exists:
+            return JSONResponse(
+                status_code=404,
+                content={"detail": "Training record not found"},
+            )
+        return TrainingRecord(
+            **json.loads(
+                database_connection.get_objects(
+                    training_collection_name, [training_id]
+                )[0]
+            )
+        )
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"Failed to get training record: {e}"},
+        )
+
+
+@router.post(
+    "/v0/training/{training_id}/stop",
+    summary="Stop training by id",
+    response_model=ResponseMessage,
+    responses={
+        500: {"model": ResponseMessage},
+        404: {"model": ResponseMessage},
+    },
+)
+async def stop_training(training_id: str, request: Request):
+    """
+    Stop training by id.
+
+    Parameters
+    ----------
+    training_id : str
+        The id of the training record.
+
+    Returns
+    -------
+    ResponseMessage
+        The response message.
+    """
+    database_connection = request.app.state.database_connection
+
+    # get execution record
+    try:
+        object_exists = database_connection.check_objects_exist(
+            "training-store", [training_id]
+        )[0]
+        if not object_exists:
+            return ResponseMessage(detail="Training record not found")
+        training_record = TrainingRecord(
+            **json.loads(
+                database_connection.get_objects(
+                    "training-store", [training_id]
+                )[0]
+            )
+        )
+    except Exception as e:
+        return ResponseMessage(detail=f"Failed to get training record: {e}")
+
+    status = training_record.status.upper()
+    if status not in STOPPABLE_STATES:
+        return ResponseMessage(
+            detail=f"Training in state {status} cannot be stopped"
+        )
+
+    try:
+        stop_request = StopRequest(training_id, database_connection)
+        stop_request.submit()
+        return ResponseMessage(detail="Stop request posted successfully")
+    except Exception as e:
+        return ResponseMessage(detail=f"Failed to post stop request: {e}")

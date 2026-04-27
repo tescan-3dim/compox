@@ -6,6 +6,7 @@ All rights reserved
 import pytest
 import json
 import io
+import zipfile
 from unittest.mock import patch, MagicMock
 from pydantic import BaseModel, ConfigDict, ValidationError
 import numpy as np
@@ -13,7 +14,7 @@ import h5py
 from datetime import datetime
 
 from compox.tasks.TaskHandler import TaskHandler
-from compox.tasks.context_task_handler import current_task_handler
+from compox.tasks.context_handler import current_handler
 
 
 class DummySchema(BaseModel):
@@ -59,6 +60,32 @@ class DummySession:
         Remove the object stored under `key` (raises KeyError if missing).
         """
         del self.store[key]
+
+
+def _create_runner_zip_with_version(
+    version: str, module_name: str = "runner_module"
+) -> bytes:
+    """
+    Build a minimal runner module zip with an identifiable class VERSION.
+    """
+    buffer = io.BytesIO()
+    runner_code = f"""
+class Runner:
+    VERSION = "{version}"
+
+    def initialize(self, device=None):
+        self.device = device
+
+    def _load_assets(self):
+        pass
+
+    def register_task_handler(self, handler, algorithm_json):
+        pass
+"""
+    with zipfile.ZipFile(buffer, "w") as z:
+        z.writestr(f"{module_name}.py", runner_code.strip() + "\n")
+    buffer.seek(0)
+    return buffer.read()
 
 
 def verify_storage_and_get_saved_json(mock_connection):
@@ -219,23 +246,24 @@ def test_invalid_progress_raises(task_handler):
 # Test 5 - Test Fetch Algorithm
 def test_fetch_algorithm(task_handler):
     """
-    Verify that fetch_algorithm calls the private cached method and registers the runner.
+    Verify that fetch_algorithm calls the private cached method, stores the
+    resolved runtime device and registers the runner.
     """
     dummy_runner = MagicMock(name="RunnerInstance")
     dummy_assets = ["asset-1", "asset-2"]
-    dummy_json = {
-        "algorithm_name": "foo_alg",
-        "algorithm_major_version": "1",
-        "algorithm_minor_version": "0",
-    }
+    resolved_runtime_device = "cuda"
 
     with patch.object(
         TaskHandler,
         "_TaskHandler__cached_fetch_algorithm",
-        return_value=(dummy_runner, dummy_assets, dummy_json),
+        return_value=(
+            dummy_runner,
+            dummy_assets,
+            resolved_runtime_device,
+        ),
     ) as mock_cached:
 
-        returned = task_handler.fetch_algorithm("any-id")
+        returned = task_handler.fetch_algorithm("1")
 
     assert (
         returned == dummy_runner
@@ -244,9 +272,16 @@ def test_fetch_algorithm(task_handler):
         f"Expected algorithm_assets to be {dummy_assets!r}, "
         f"got {task_handler.algorithm_assets!r}"
     )
-    task_handler.set_as_current_task_handler()
+    stored_record = task_handler._get_task_record()
+    assert (
+        stored_record["resolved_execution_device"] == resolved_runtime_device
+    ), (
+        "Expected fetch_algorithm to persist the resolved runtime device, "
+        f"got {stored_record.get('resolved_execution_device')!r}"
+    )
+    task_handler.set_as_current_handler()
 
-    context_task_handler = current_task_handler.get()
+    context_task_handler = current_handler.get()
     assert (
         context_task_handler == task_handler
     ), f"Expected current_task_handler to be the same task_handler, got {context_task_handler!r}"
@@ -276,27 +311,94 @@ def test_cached_fetch_algorithm_uses_cache(task_handler, mock_connection):
         dummy_mod.Runner = DummyRunner
         mock_import.return_value.__enter__.return_value = dummy_mod
         runner1 = task_handler.fetch_algorithm("1")
-        calls_first = (
-            mock_connection.list_objects.call_count
-            + mock_connection.get_objects.call_count
-        )
+        calls_first = mock_connection.get_objects.call_count
 
         assert (
             calls_first > 0
         ), f"Expected storage calls on first fetch, got {calls_first}"
 
         runner2 = task_handler.fetch_algorithm("1")
-        calls_second = (
-            mock_connection.list_objects.call_count
-            + mock_connection.get_objects.call_count
-        )
+        calls_second = mock_connection.get_objects.call_count
 
     assert (
         runner1 == runner2
-    ), f"Expected same runner instance from cache on second fetch"
+    ), "Expected same runner instance from cache on second fetch"
+    # fetch_algorithm now always refreshes algorithm metadata and also reloads the
+    # task record to persist the resolved runtime device, so only module loading
+    # should stay cached between calls.
+    assert mock_import.call_count == 1, (
+        f"Expected ZipImporter to be invoked once due to cache hit, got {mock_import.call_count}"
+    )
     assert (
-        calls_second == calls_first
-    ), f"Expected no additional storage calls on second fetch, got {calls_second - calls_first} extra"
+        calls_second - calls_first == 2
+    ), (
+        "Expected one extra algorithm metadata fetch and one task-record fetch "
+        f"on second call, got {calls_second - calls_first}"
+    )
+
+
+def test_fetch_algorithm_resolves_new_latest_minor_when_minor_is_none(
+    task_handler, mock_connection
+):
+    """
+    If latest minor changes in storage and caller passes algorithm_minor_version=None,
+    fetch_algorithm should load the new latest module (not stale cached one).
+    """
+    # Clear algorithm cache for isolation.
+    cache_func = TaskHandler._TaskHandler__cached_fetch_algorithm
+    cache_dict = cache_func.__closure__[0].cell_contents
+    access_order = cache_func.__closure__[1].cell_contents
+    cache_dict.clear()
+    access_order.clear()
+
+    algorithm_id = "alg-latest-cache-test"
+    algorithm_key = f"{algorithm_id}~cache_test_algo~1"
+    latest_minor_state = {"value": "0"}
+    module_v0 = _create_runner_zip_with_version("v0", "module_v0")
+    module_v1 = _create_runner_zip_with_version("v1", "module_v1")
+
+    def list_objects(bucket):
+        if bucket == "algorithm-store":
+            return [{"Key": algorithm_key}]
+        if bucket == "module-store":
+            return [{"Key": "module_v0"}, {"Key": "module_v1"}]
+        return []
+
+    def get_objects(bucket, keys):
+        if bucket == "algorithm-store":
+            record = {
+                "algorithm_id": algorithm_id,
+                "algorithm_name": "cache_test_algo",
+                "algorithm_major_version": "1",
+                "supported_devices": ["cpu"],
+                "default_device": "cpu",
+                "latest_algorithm_minor_version": latest_minor_state["value"],
+                "algorithm_minor_version": {
+                    "0": {"module_id": "module_v0", "assets": {}},
+                    "1": {"module_id": "module_v1", "assets": {}},
+                },
+            }
+            return [json.dumps(record)]
+        if bucket == "module-store":
+            module_id = keys[0]
+            return [module_v0 if module_id == "module_v0" else module_v1]
+        return [json.dumps({})]
+
+    mock_connection.list_objects.side_effect = list_objects
+    mock_connection.get_objects.side_effect = get_objects
+
+    runner_first = task_handler.fetch_algorithm(
+        algorithm_id, algorithm_minor_version=None
+    )
+    assert getattr(runner_first, "VERSION", None) == "v0"
+
+    # Simulate redeploy: latest minor is now 1.
+    latest_minor_state["value"] = "1"
+
+    runner_second = task_handler.fetch_algorithm(
+        algorithm_id, algorithm_minor_version=None
+    )
+    assert getattr(runner_second, "VERSION", None) == "v1"
 
 
 # Test 7 – Fetch Asset
@@ -304,23 +406,23 @@ def test_fetch_asset(task_handler, mock_connection):
     """
     Verify fetch_asset retrieves the correct bytes and calls the proper bucket.
     """
-    with patch("importlib.import_module") as mock_import:
-        # Create the instance that should have `.initialize`
-        mock_runner_instance = MagicMock()
-        mock_runner_instance.initialize = MagicMock()
+    class DummyRunner:
+        def __new__(cls):
+            instance = super().__new__(cls)
+            return instance
 
-        # Create the Runner class that returns the instance
-        mock_runner_class = MagicMock(return_value=mock_runner_instance)
+        def initialize(self, device=None):
+            self.device = device
 
-        # Create the dummy module with the Runner class
-        dummy_module = MagicMock()
-        dummy_module.Runner = mock_runner_class
+        def _load_assets(self):
+            pass
 
-        # Patch importlib to return the dummy module
-        mock_import.return_value = dummy_module
-
+    with patch("compox.tasks.TaskHandler.ZipImporter") as mock_import:
+        dummy_mod = MagicMock()
+        dummy_mod.Runner = DummyRunner
+        mock_import.return_value.__enter__.return_value = dummy_mod
         task_handler.fetch_algorithm("1")
-        result = task_handler.fetch_asset(0)
+        result = task_handler.fetch_asset("asset-1")
 
         assert (
             result.read() == b"dummy binary content"
@@ -379,7 +481,7 @@ def test_fetch_data_invalid_hdf5_raises(task_handler, mock_connection):
     Verify fetch_data raises on invalid HDF5 bytes.
     """
     mock_connection.get_objects.side_effect = lambda bucket, keys: [
-        b"not a valid hdf5"
+        b"not a valid hdf5" if bucket == "data-store" else json.dumps({})
     ]
     with pytest.raises(Exception):
         task_handler.fetch_data(["bad-file"], DummySchema)

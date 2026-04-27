@@ -7,6 +7,7 @@ import logging
 import sys
 import os
 import inspect
+import re
 from loguru import logger
 
 
@@ -30,7 +31,7 @@ class InterceptHandler(logging.Handler):
         super().__init__()
         self.debug = debug
         self.prefix = prefix
-        self.logger = logger.bind(log_type=self.prefix)
+        self.logger = logger.bind(log_type=self.prefix or "DEFAULT")
 
     def emit(self, record: logging.LogRecord) -> None:
         # Get corresponding Loguru level if it exists
@@ -51,13 +52,14 @@ class InterceptHandler(logging.Handler):
             depth += 1
 
         # Log with Loguru, include exception info if any
+        bound_logger = self.logger.bind(source_logger=record.name)
         if self.debug:
-            self.logger.opt(depth=depth, exception=record.exc_info).log(
+            bound_logger.opt(depth=depth, exception=record.exc_info).log(
                 level, record.getMessage()
             )
         else:
             if level != "DEBUG":
-                self.logger.opt(depth=depth, exception=record.exc_info).log(
+                bound_logger.opt(depth=depth, exception=record.exc_info).log(
                     level, record.getMessage()
                 )
 
@@ -70,11 +72,54 @@ def ensure_stdout_stderr():
             sys.stderr = open(os.devnull, "w")
 
 
+# setup filters and handlers for the logger
+_POLLING_ACCESS_PATTERNS = (
+    re.compile(r"GET /api/v\d+/executions/[^ ]+"),
+    re.compile(r"GET /api/v\d+/training/[^ ]+"),
+    re.compile(r"GET /api/v\d+/deploy/[^ ]+"),
+    re.compile(r"POST /api/v\d+/files/?"),
+    re.compile(r"DELETE /api/v\d+/files/[^ ]+"),
+    re.compile(r"GET /api/v\d+/files/[^ ]+"),
+)
+_DEBUG_CONSOLE_LEVELS = {"TRACE", "DEBUG"}
+
+
+def _is_polling_access_log(message: str) -> bool:
+    """
+    Return True when a uvicorn access log line represents a high-frequency
+    polling request that should not be shown on the interactive console.
+    """
+    return any(pattern.search(message) for pattern in _POLLING_ACCESS_PATTERNS)
+
+
+def _should_emit_console_record(
+    record: dict, console_level: str = "INFO"
+) -> bool:
+    """
+    Decide whether a log record should be shown on the interactive console.
+
+    Detailed request logs remain available in the file sink, but high-frequency
+    polling requests are suppressed on the console to keep task lifecycle logs
+    readable.
+    """
+    if console_level.upper() in _DEBUG_CONSOLE_LEVELS:
+        return True
+
+    extra = record["extra"]
+    if extra.get("log_type") == "MINIO" and record["level"].name != "ERROR":
+        return False
+    if extra.get("source_logger") == "uvicorn.access":
+        return not _is_polling_access_log(record["message"])
+    return True
+
+
 def configure_logging(
     log_path: str,
     rotation_mb: int = 8,
     retention_days: int = 10,
     debug: bool = False,
+    console_level: str = "INFO",
+    file_level: str = "INFO",
 ):
     """
     Configure the loguru logger.
@@ -87,6 +132,10 @@ def configure_logging(
         The size of the log file in MB before it is rotated. The default is 8.
     debug : bool, optional
             If True, set the log level to DEBUG. The default is False.
+    console_level : str, optional
+        The minimum log level emitted to the console sink. The default is "INFO".
+    file_level : str, optional
+        The minimum log level emitted to the file sink. The default is "INFO".
 
 
     Returns
@@ -126,11 +175,19 @@ def configure_logging(
         logging.getLogger(logger_name).propagate = False
 
     # format log messages
-    log_format = (
+    console_log_format = (
         "<green>{time:YYYY-MM-DD at HH:mm:ss}</green> | "
         "<bold><white>{extra[log_type]:<8}</white></bold> | "
         "<level>{level: <7}</level> | "
-        "<bold><magenta>{extra[algorithm]}</magenta></bold> <cyan>{module}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
+        "<bold><magenta>{extra[algorithm]}</magenta></bold> "
+        "<cyan>{module}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
+        "{message}"
+    )
+    file_log_format = (
+        "{time:YYYY-MM-DD at HH:mm:ss} | "
+        "{extra[log_type]:<8} | "
+        "{level: <7} | "
+        "{extra[algorithm]} {module}:{function}:{line} - "
         "{message}"
     )
 
@@ -141,7 +198,13 @@ def configure_logging(
     # but not if the application is frozen (e.g. PyInstaller)
     if not getattr(sys, "frozen", False):  # PyInstaller sets sys.frozen = True
         logger.add(
-            sys.__stderr__, level="INFO", format=log_format, colorize=True
+            sys.__stderr__,
+            level=console_level,
+            format=console_log_format,
+            colorize=True,
+            filter=lambda record: _should_emit_console_record(
+                record, console_level
+            ),
         )
 
     # this configures the log file handler as a secondary sink for log messages
@@ -149,13 +212,15 @@ def configure_logging(
         log_path,
         rotation=f"{rotation_mb} MB",
         retention=f"{retention_days} days",
-        level="INFO",
-        format=log_format,
+        level=file_level,
+        format=file_log_format,
     )
 
     # this configures the extra field default value for the log messages
     # this should be modified in the event we want to add more fields to the log messages
-    logger.configure(extra={"log_type": "DEFAULT", "algorithm": ""})
+    logger.configure(
+        extra={"log_type": "DEFAULT", "algorithm": "", "source_logger": ""}
+    )
 
     # this configures the default log level for the logger
     logger_object = logger.bind(log_type="DEFAULT")

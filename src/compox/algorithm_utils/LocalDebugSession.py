@@ -4,13 +4,14 @@ from PIL import Image, ImageSequence
 
 from compox.tasks.DebuggingTaskHandler import DebuggingTaskHandler
 
+
 class LocalDebugSession:
     """
     Helper class for running Compox algorithms locally in a simplified
     "debug" environment.
 
-    It sets up a fake `TaskHandler`, uploads image data to an in-memory database, 
-    and runs the specified algorithm. It allows developers to test and debug 
+    It sets up a fake `TaskHandler`, uploads image data to an in-memory database,
+    and runs the specified algorithm. It allows developers to test and debug
     algorithms without deploying them to a full Compox server.
 
     Parameters
@@ -24,17 +25,18 @@ class LocalDebugSession:
         Default is `"data-store"`.
     """
 
-    def __init__(self, task_id="local-debug", device="cpu", tmp_bucket="data-store"):
+    def __init__(
+        self, task_id="local-debug", device="cpu", tmp_bucket="data-store"
+    ):
         self.task = DebuggingTaskHandler(task_id)
-        self.task.set_as_current_task_handler()
+        self.task.set_as_current_handler()
         self.bucket = tmp_bucket
         self.device = device
 
-
     def _to_h5_bytes(self, arr):
         """
-        Convert a NumPy array into an in-memory HDF5 file. Each image slice 
-        is stored as a small binary HDF5 object (byte array), which mimics 
+        Convert a NumPy array into an in-memory HDF5 file. Each image slice
+        is stored as a small binary HDF5 object (byte array), which mimics
         the format expected by the Compox database.
 
         Parameters
@@ -53,11 +55,10 @@ class LocalDebugSession:
             f.create_dataset("image", data=arr)
         return bio.getvalue()
 
-
     def load_data(self, source):
         """
         Load image data from a specified source into the local debug database.
-        
+
         Parameters
         ----------
         source : str
@@ -84,8 +85,7 @@ class LocalDebugSession:
                 return self.load_from_h5(source)
             else:
                 raise ValueError(f"Unsupported file type: {ext}")
-            
-    
+
     def load_from_npy(self, filepath: str) -> list[str]:
         """
         Load a .npy file and store it as individual 2D slices in the fake database.
@@ -118,9 +118,10 @@ class LocalDebugSession:
             )
 
         ids = [str(uuid.uuid4()) for _ in slices_bytes]
-        self.task.database_connection.put_objects(self.bucket, ids, slices_bytes)
+        self.task.database_connection.put_objects(
+            self.bucket, ids, slices_bytes
+        )
         return ids
-    
 
     def load_from_h5(self, filepath: str) -> list[str]:
         """
@@ -147,9 +148,11 @@ class LocalDebugSession:
 
         def _find_datasets(f):
             found = []
+
             def visitor(name, obj):
                 if isinstance(obj, h5py.Dataset) and obj.ndim in (2, 3):
                     found.append((name, obj))
+
             f.visititems(visitor)
             return found
 
@@ -175,9 +178,10 @@ class LocalDebugSession:
                 raise ValueError("Internal error: filtered ndim != 2/3")
 
         ids = [str(uuid.uuid4()) for _ in slices_bytes]
-        self.task.database_connection.put_objects(self.bucket, ids, slices_bytes)
+        self.task.database_connection.put_objects(
+            self.bucket, ids, slices_bytes
+        )
         return ids
-
 
     def load_from_pil_image(self, filepath: str) -> list[str]:
         """
@@ -200,7 +204,9 @@ class LocalDebugSession:
         slice_bytes = self._to_h5_bytes(arr)
         obj_id = str(uuid.uuid4())
 
-        self.task.database_connection.put_objects(self.bucket, [obj_id], [slice_bytes])
+        self.task.database_connection.put_objects(
+            self.bucket, [obj_id], [slice_bytes]
+        )
         return [obj_id]
 
     def load_from_tiff(self, filepath: str) -> list[str]:
@@ -231,11 +237,14 @@ class LocalDebugSession:
                 slices_bytes.append(self._to_h5_bytes(arr))
 
         ids = [str(uuid.uuid4()) for _ in slices_bytes]
-        self.task.database_connection.put_objects(self.bucket, ids, slices_bytes)
+        self.task.database_connection.put_objects(
+            self.bucket, ids, slices_bytes
+        )
         return ids
 
-
-    def load_from_folder(self, folder, exts=(".tif", ".tiff", ".png", ".jpg", ".jpeg")):
+    def load_from_folder(
+        self, folder, exts=(".tif", ".tiff", ".png", ".jpg", ".jpeg")
+    ):
         """
         Load a folder of image slices (e.g., PNG/TIFF) into the local database.
         Each image is read from disk, converted to a NumPy array, serialized
@@ -260,7 +269,11 @@ class LocalDebugSession:
             If no supported image slices are found in the folder.
         """
 
-        paths = [p for p in sorted(glob.glob(os.path.join(folder, "*"))) if p.lower().endswith(exts)]
+        paths = [
+            p
+            for p in sorted(glob.glob(os.path.join(folder, "*")))
+            if p.lower().endswith(exts)
+        ]
         if not paths:
             raise ValueError(
                 f"No supported image slices found in folder '{folder}'. "
@@ -282,10 +295,9 @@ class LocalDebugSession:
         self.task.database_connection.put_objects(self.bucket, ids, files)
         return ids
 
-
     def run(self, algo_dir, inputs: dict, args: dict | None = None):
         """
-        Execute a Compox algorithm locally. This method fetches and runs the algorithm 
+        Execute a Compox algorithm locally. This method fetches and runs the algorithm
         from the specified folder.
 
         Parameters

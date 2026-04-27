@@ -64,7 +64,9 @@ class Runner(Image2SegmentationRunner):
         return callback
 
 
-    def inference(self, input_data: np.ndarray, args: dict = {}) -> np.ndarray:
+    def inference(
+        self, input_data: np.ndarray, args: dict | None = None
+    ) -> np.ndarray:
 
         # Prepare data and setup model
         zarr_path, output_path = self.prepare_data(input_data, args)

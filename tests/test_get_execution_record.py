@@ -209,3 +209,93 @@ def test_multiple_tasks(server_url):
     for i in range(n):
         for output_dataset_id in task_record[i]["output_dataset_ids"]:
             assert is_valid_uuid(output_dataset_id)
+
+
+@pytest.mark.algorithms
+def test_back_and_forth_foo_bar(server_url):
+    base_url = f"{server_url}/api/v0/executions"
+    execute_url = f"{server_url}/api/v0/execute-algorithm"
+    file_url = f"{server_url}/api/v0/files"
+    algorithm_url = f"{server_url}/api/v0/algorithm"
+
+    # First execution with foo
+    payload = prepare_random_payload(10, 256, 256)
+    responses = post_files(file_url, payload)
+    file_ids = []
+    for response in responses:
+        print(response.json())
+        assert response.status_code == 200
+        file_ids.append(response.json()["file_id"])
+
+    response = get_algorithm_id(algorithm_url, "foo", "1")
+    print(response.json())
+    assert response.status_code == 200
+    algorithm_id = response.json()["algorithm_id"]
+
+    response = execute_algorithm(execute_url, file_ids, algorithm_id)
+    print(response.json())
+    assert response.status_code == 200
+
+    execution_id_foo = response.json()["execution_id"]
+    response = get_execution_record(base_url, execution_id_foo)
+
+    while response.json()["status"] != "COMPLETED":
+        if response.json()["status"] == "FAILED":
+            assert False, "Task failed"
+        response = get_execution_record(base_url, execution_id_foo)
+        print(response.json())
+        assert response.status_code == 200
+        time.sleep(0.5)
+
+    print(response.json())
+    assert response.status_code == 200
+    assert "This is Foo!" in response.json()["log"]
+
+    # Second execution with bar
+    response = get_algorithm_id(algorithm_url, "bar", "1")
+    print(response.json())
+    assert response.status_code == 200
+    algorithm_id = response.json()["algorithm_id"]
+
+    response = execute_algorithm(execute_url, file_ids, algorithm_id)
+    print(response.json())
+    assert response.status_code == 200
+
+    execution_id_bar = response.json()["execution_id"]
+    response = get_execution_record(base_url, execution_id_bar)
+
+    while response.json()["status"] != "COMPLETED":
+        if response.json()["status"] == "FAILED":
+            assert False, "Task failed"
+        response = get_execution_record(base_url, execution_id_bar)
+        print(response.json())
+        assert response.status_code == 200
+        time.sleep(0.5)
+
+    print(response.json())
+    assert response.status_code == 200
+    assert execution_id_foo != execution_id_bar
+    assert "This is Bar!" in response.json()["log"]
+
+    # run foo again to verify consistency
+    response = get_algorithm_id(algorithm_url, "foo", "1")
+    print(response.json())
+    assert response.status_code == 200
+    algorithm_id = response.json()["algorithm_id"]
+    response = execute_algorithm(execute_url, file_ids, algorithm_id)
+    print(response.json())
+    assert response.status_code == 200
+    execution_id_foo_2 = response.json()["execution_id"]
+    response = get_execution_record(base_url, execution_id_foo_2)
+    while response.json()["status"] != "COMPLETED":
+        if response.json()["status"] == "FAILED":
+            assert False, "Task failed"
+        response = get_execution_record(base_url, execution_id_foo_2)
+        print(response.json())
+        assert response.status_code == 200
+        time.sleep(0.5)
+    print(response.json())
+    assert response.status_code == 200
+    assert "This is Foo!" in response.json()["log"]
+    assert execution_id_foo != execution_id_foo_2
+    assert is_valid_uuid(execution_id_foo_2)

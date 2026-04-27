@@ -6,10 +6,10 @@ All rights reserved
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from starlette.responses import StreamingResponse
-from compox.pydantic_models import *
 import io
 import h5py
 from compox.server_utils import generate_uuid, calculate_s3_etag
+from compox.pydantic_models import FileUploadResponse, ResponseMessage
 
 router = APIRouter(prefix="/api", tags=["file-controller"])
 
@@ -18,9 +18,12 @@ router = APIRouter(prefix="/api", tags=["file-controller"])
     "/v0/files",
     summary="Uploads an image stack as a hdf5 file to the database",
     response_model=FileUploadResponse,
-    responses={500: {"model": ResponseMessage}, 422: {"model": ResponseMessage}},
+    responses={
+        500: {"model": ResponseMessage},
+        422: {"model": ResponseMessage},
+    },
 )
-async def upload_dataset(request: Request) -> FileUploadResponse:
+async def upload_files(request: Request) -> FileUploadResponse:
     """
     Uploads an image stack as a hdf5 file to the database.
 
@@ -43,7 +46,7 @@ async def upload_dataset(request: Request) -> FileUploadResponse:
     try:
         with h5py.File(bio, "r") as f:
             assert f is not None
-    except:
+    except Exception as _:
         return JSONResponse(
             status_code=422,
             content={"detail": "The provided file is not a valid hdf5 file."},
@@ -58,6 +61,7 @@ async def upload_dataset(request: Request) -> FileUploadResponse:
         if False:
             # calculate file etag hash
             etag = calculate_s3_etag(bio)
+            s3_client = database_connection.s3_client
 
             # if file already exists, return the existing file id
             try:
@@ -72,7 +76,7 @@ async def upload_dataset(request: Request) -> FileUploadResponse:
                             return FileUploadResponse(
                                 file_id=obj["Key"],
                             )
-            except Exception as e:
+            except Exception as _:
                 print(
                     "No existing file found with matching etag hash found, uploading..."
                 )
@@ -96,12 +100,15 @@ async def upload_dataset(request: Request) -> FileUploadResponse:
 
 @router.get(
     "/v0/files/{id}",
-    summary="Downloads a dataset from the database",
-    responses={500: {"model": ResponseMessage}, 404: {"model": ResponseMessage}},
+    summary="Downloads a file from the database",
+    responses={
+        500: {"model": ResponseMessage},
+        404: {"model": ResponseMessage},
+    },
 )
-async def download_dataset(id: str, request: Request) -> StreamingResponse:
+async def download_file(id: str, request: Request):
     """
-    Downloads a dataset from database.
+    Downloads a file from database.
 
     Parameters
     ----------
@@ -109,6 +116,7 @@ async def download_dataset(id: str, request: Request) -> StreamingResponse:
         The id of the dataset.
     request : Request
         The request.
+        The id of the file.
 
     Returns
     -------
@@ -145,18 +153,21 @@ async def download_dataset(id: str, request: Request) -> StreamingResponse:
 
 @router.delete(
     "/v0/files/{id}",
-    summary="Deletes a dataset from the database",
+    summary="Deletes a file from the database",
     response_model=ResponseMessage,
-    responses={500: {"model": ResponseMessage}, 404: {"model": ResponseMessage}},
+    responses={
+        500: {"model": ResponseMessage},
+        404: {"model": ResponseMessage},
+    },
 )
-async def delete_dataset(id: str, request: Request) -> ResponseMessage:
+async def delete_file(id: str, request: Request) -> ResponseMessage:
     """
-    Deletes a dataset from the database.
+    Deletes a file from the database.
 
     Parameters
     ----------
     id : str
-        The id of the dataset.
+        The id of the file.
     request : Request
         The request.
 
@@ -168,7 +179,9 @@ async def delete_dataset(id: str, request: Request) -> ResponseMessage:
     database_connection = request.app.state.database_connection
 
     try:
-        objects_exist = database_connection.check_objects_exist("data-store", [id])
+        objects_exist = database_connection.check_objects_exist(
+            "data-store", [id]
+        )
 
         if not objects_exist[0]:
             return JSONResponse(
@@ -181,7 +194,7 @@ async def delete_dataset(id: str, request: Request) -> ResponseMessage:
             status_code=200,
             content={"detail": "File deleted successfully"},
         )
-    except:
+    except Exception as _:
         return JSONResponse(
             status_code=500,
             content={"detail": "Failed to delete file"},

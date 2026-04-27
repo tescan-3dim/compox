@@ -9,14 +9,14 @@ from datetime import datetime
 import os
 import shutil
 import glob
+import copy
 import tempfile
-import zipimport
-import importlib
+import zipfile
 import sys
-import re
 import hashlib
+import pathlib
+import subprocess
 import python_minifier
-import ast
 import toml
 import warnings
 from loguru import logger
@@ -24,7 +24,18 @@ from loguru import logger
 from compox.algorithm_utils.AlgorithmConfigSchema import (
     AlgorithmConfigSchema,
 )
+from compox.algorithm_utils.import_relativizer import (
+    relativize_intra_package_imports,
+)
 from compox.database_connection import BaseConnection
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    try:
+        import tomli as tomllib
+    except ModuleNotFoundError:
+        tomllib = None
 
 
 class AlgorithmDeployer:
@@ -44,13 +55,15 @@ class AlgorithmDeployer:
         The path to the algorithm directory.
     """
 
+    _IGNORED_METADATA_DIRS = {".git", "__pycache__"}
+    _IGNORED_METADATA_FILES = {".gitignore", ".gitmodules", ".gitattributes"}
+
     def __init__(
         self,
         algorithm_directory: str,
     ):
 
         self.logger = logger.bind(log_type="DEPLOYER")
-        self.algorithm_id = self.generate_uuid()
         self.algorithm_directory = algorithm_directory
 
         pyproject_toml = self.parse_pyproject_toml(algorithm_directory)
@@ -77,6 +90,11 @@ class AlgorithmDeployer:
             self.additional_parameters = algorithm_config_schema[
                 "additional_parameters"
             ]
+            self.training_parameters = algorithm_config_schema[
+                "training_parameters"
+            ]
+            self.removable = algorithm_config_schema.get("removable", False)
+            self.exportable = algorithm_config_schema.get("exportable", True)
         else:
             warnings.warn(
                 (
@@ -99,11 +117,99 @@ class AlgorithmDeployer:
             self.additional_parameters = algorithm_config_schema[
                 "additional_parameters"
             ]
+            self.training_parameters = algorithm_config_schema[
+                "training_parameters"
+            ]
+            self.removable = algorithm_config_schema.get("removable", False)
+            self.exportable = algorithm_config_schema.get("exportable", True)
 
-        self.check_importable = pyproject_toml.get("tool", {}).get("compox", {}).get("check_importable", False)
-        self.obfuscate = pyproject_toml.get("tool", {}).get("compox", {}).get("obfuscate", True)
-        self.hash_module = pyproject_toml.get("tool", {}).get("compox", {}).get("hash_module", True)
-        self.hash_assets = pyproject_toml.get("tool", {}).get("compox", {}).get("hash_assets", True)
+        self.check_importable = (
+            pyproject_toml.get("tool", {})
+            .get("compox", {})
+            .get("check_importable", False)
+        )
+        self.obfuscate = (
+            pyproject_toml.get("tool", {})
+            .get("compox", {})
+            .get("obfuscate", True)
+        )
+        tool_compox = pyproject_toml.get("tool", {}).get("compox", {})
+        if "hash_module" in tool_compox or "hash_assets" in tool_compox:
+            warnings.warn(
+                "hash_module/hash_assets are deprecated and ignored. "
+                "Deduplication by content hash is always enabled.",
+                DeprecationWarning,
+            )
+        self.hash_module = tool_compox.get("hash_module", True)
+        self.hash_assets = tool_compox.get("hash_assets", True)
+
+    @staticmethod
+    def _find_algorithm_root(extracted_root: str) -> str:
+        """
+        Find the algorithm root folder within an extracted zip directory.
+        If a single top-level directory exists and contains pyproject.toml,
+        return that directory, otherwise return the extracted root.
+        """
+        entries = [
+            os.path.join(extracted_root, name)
+            for name in os.listdir(extracted_root)
+        ]
+        directories = [p for p in entries if os.path.isdir(p)]
+        if len(directories) == 1 and os.path.isfile(
+            os.path.join(directories[0], "pyproject.toml")
+        ):
+            return directories[0]
+        return extracted_root
+
+    @classmethod
+    def deploy_from_zip(
+        cls,
+        zip_path: str,
+        database_connection: BaseConnection.BaseConnection | None = None,
+        algorithm_name_override: str | None = None,
+        algorithm_major_version_override: str | None = None,
+        algorithm_collection_name: str = "algorithm-store",
+        module_collection_name: str = "module-store",
+        asset_collection_name: str = "asset-store",
+    ) -> str:
+        """
+        Deploy an algorithm from a zip archive containing the algorithm files.
+
+        Parameters
+        ----------
+        zip_path : str
+            Path to the algorithm zip archive.
+        database_connection : BaseConnection.BaseConnection | None
+            The database connection object.
+        algorithm_name_override : str | None
+            The algorithm name override.
+        algorithm_major_version_override : str | None
+            The algorithm major version override.
+        algorithm_collection_name : str, optional
+            The name of the collection to store the algorithm.
+        module_collection_name : str, optional
+            The name of the collection to store the module.
+        asset_collection_name : str, optional
+            The name of the collection to store the assets.
+
+        Returns
+        -------
+        str
+            algorithm id
+        """
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                zf.extractall(tmp_dir)
+            algorithm_root = cls._find_algorithm_root(tmp_dir)
+            deployer = cls(algorithm_root)
+            return deployer.store_algorithm(
+                database_connection=database_connection,
+                algorithm_name_override=algorithm_name_override,
+                algorithm_major_version_override=algorithm_major_version_override,
+                algorithm_collection_name=algorithm_collection_name,
+                module_collection_name=module_collection_name,
+                asset_collection_name=asset_collection_name,
+            )
 
     def parse_pyproject_toml(self, path_to_algorithm_directory: str) -> dict:
         """
@@ -126,23 +232,38 @@ class AlgorithmDeployer:
             If pyproject.toml not found in algorithm directory.
 
         """
-        if not os.path.exists(
-            os.path.join(path_to_algorithm_directory, "pyproject.toml")
-        ):
+        pyproject_path = os.path.join(
+            path_to_algorithm_directory, "pyproject.toml"
+        )
+        if not os.path.exists(pyproject_path):
             raise FileNotFoundError(
                 f"pyproject.toml file not found in {path_to_algorithm_directory}."
             )
-        with open(
-            os.path.join(path_to_algorithm_directory, "pyproject.toml")
-        ) as f:
-            pyproject_toml = toml.load(f)
+
+        if tomllib is not None:
+            try:
+                with open(pyproject_path, "rb") as f:
+                    pyproject_toml = tomllib.load(f)
+            except tomllib.TOMLDecodeError as e:
+                raise ValueError(
+                    f"Invalid pyproject.toml in {path_to_algorithm_directory}: {e}."
+                ) from e
+        else:
+            try:
+                with open(pyproject_path, encoding="utf-8") as f:
+                    pyproject_toml = toml.load(f)
+            except toml.TomlDecodeError as e:
+                raise ValueError(
+                    f"Invalid pyproject.toml in {path_to_algorithm_directory}: {e}."
+                ) from e
 
         return pyproject_toml
 
     def store_algorithm(
         self,
         database_connection: BaseConnection.BaseConnection | None = None,
-        separate_runner_path: str | None = None,
+        algorithm_name_override: str | None = None,
+        algorithm_major_version_override: str | None = None,
         algorithm_collection_name: str = "algorithm-store",
         module_collection_name: str = "module-store",
         asset_collection_name: str = "asset-store",
@@ -157,19 +278,16 @@ class AlgorithmDeployer:
             The database connection object. Can be None if the algorithm is not
             supposed to be stored in the database (e.g. for local testing and
             development).
-
-        separate_runner_path : str | None , optional
-            The path to the runner file. Use this if the runner file is not in
-            the root of the algorithm directory. The default is None.
-
+        algorithm_name_override : str | None
+            The algorithm name override.
+        algorithm_major_version_override : str | None
+            The algorithm major version override.
         algorithm_collection_name : str, optional
             The name of the collection to store the algorithm. The default is
             "algorithm-store".
-
         module_collection_name : str, optional
             The name of the collection to store the module. The default is
             "module-store".
-
         asset_collection_name : str, optional
             The name of the collection to store the assets. The default is
             "asset-store".
@@ -185,30 +303,87 @@ class AlgorithmDeployer:
             if algorithm module or assets store failed
         """
 
+        if algorithm_name_override is not None:
+            self.algorithm_name = algorithm_name_override
+        if algorithm_major_version_override is not None:
+            self.algorithm_major_version = algorithm_major_version_override
+        # check if the algorithm already exists in the database
+        if database_connection is not None:
+            existing_algorithm_record = (
+                self._self_find_existing_algorithm_by_name_and_version(
+                    database_connection,
+                    self.algorithm_name,
+                    self.algorithm_major_version,
+                )
+            )
+            if existing_algorithm_record is not None:
+                self.logger.info(
+                    f"""Algorithm {self.algorithm_name} with major version {self.algorithm_major_version} 
+                    already exists in the database with id {existing_algorithm_record['algorithm_id']}. Modifying the existing algorithm."""
+                )
+                algorithm_id = existing_algorithm_record["algorithm_id"]
+
+            else:
+                algorithm_id = self.generate_uuid()
+
         # store the algorithm module
         try:
-            algorithm_module_id = self._store_algorithm_module(
+            (
+                algorithm_module_id,
+                algorithm_module_bytes,
+            ) = self._create_algorithm_module(
                 self.algorithm_directory,
-                database_connection=database_connection,
-                separate_runner_path=separate_runner_path,
                 check_importable=self.check_importable,
                 obfuscate=self.obfuscate,
-                hash_module=self.hash_module,
-                collection_name=module_collection_name,
             )
             self.logger.info(
-                f"Stored algorithm module with id: {algorithm_module_id}"
+                f"Created algorithm module with id: {algorithm_module_id}"
             )
         except Exception as e:
-            self.logger.error(f"Failed to store algorithm module: {e}")
+            self.logger.error(f"Failed to create algorithm module: {e}")
             raise e
+
+        if database_connection is not None:
+            try:
+                if (
+                    module_collection_name
+                    not in database_connection.list_collections()
+                ):
+                    database_connection.create_collections(
+                        [module_collection_name]
+                    )
+
+                # check if module alread exists in the storage
+                module_ids_in_storage = database_connection.list_objects(
+                    module_collection_name
+                )
+                module_id_in_storage = [
+                    m["Key"] == algorithm_module_id
+                    for m in module_ids_in_storage
+                ]
+
+                if any(module_id_in_storage):
+                    self.logger.info(
+                        f"Algorithm module with id: {algorithm_module_id} already exists in the storage. Skipping upload."
+                    )
+                else:
+                    database_connection.put_objects(
+                        module_collection_name,
+                        [algorithm_module_id],
+                        [algorithm_module_bytes],
+                    )
+                    self.logger.info(
+                        f"Stored algorithm module with id: {algorithm_module_id}"
+                    )
+            except Exception as e:
+                self.logger.error(f"Failed to store algorithm module: {e}")
+                raise e
 
         # store the algorithm assets
         try:
             algorithm_assets_dict = self._store_algorithm_assets(
                 self.algorithm_directory,
                 database_connection=database_connection,
-                hash_assets=self.hash_assets,
                 collection_name=asset_collection_name,
             )
             self.logger.info(
@@ -222,27 +397,48 @@ class AlgorithmDeployer:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         # compose the algorithm json
-        algorithm_json = {
-            "algorithm_id": self.algorithm_id,
-            "algorithm_name": self.algorithm_name,
-            "algorithm_major_version": self.algorithm_major_version,
-            "algorithm_minor_version": self.algorithm_minor_version,
-            "algorithm_type": self.algorithm_type,
-            "algorithm_tags": self.tags,
-            "algorithm_description": self.description,
-            "supported_devices": self.device,
-            "default_device": self.default_device,
-            "additional_parameters": self.additional_parameters,
-            "module_id": algorithm_module_id,
-            "assets": algorithm_assets_dict,
-            "timestamp": timestamp,
-        }
+
+        if existing_algorithm_record is None:
+            algorithm_json = {
+                "algorithm_id": algorithm_id,
+                "algorithm_name": self.algorithm_name,
+                "algorithm_major_version": self.algorithm_major_version,
+                "latest_algorithm_minor_version": self.algorithm_minor_version,
+                "algorithm_minor_version": {
+                    self.algorithm_minor_version: {
+                        "timestamp": timestamp,
+                        "module_id": algorithm_module_id,
+                        "assets": algorithm_assets_dict,
+                    }
+                },
+                "algorithm_type": self.algorithm_type,
+                "algorithm_tags": self.tags,
+                "algorithm_description": self.description,
+                "supported_devices": self.device,
+                "default_device": self.default_device,
+                "additional_parameters": self.additional_parameters,
+                "training_parameters": self.training_parameters,
+                "removable": self.removable,
+                "exportable": self.exportable,
+                "timestamp": timestamp,
+            }
+            record_modified = True
+        else:
+            algorithm_json, record_modified = (
+                self._insert_new_minor_version_to_existing_algorithm(
+                    existing_algorithm_record,
+                    algorithm_module_id,
+                    algorithm_assets_dict,
+                )
+            )
+            algorithm_json["exportable"] = self.exportable
+
         algorithm_json = json.dumps(algorithm_json, indent=4)
 
         # store the algorithm json in the algorithm-store collection
         # check if the collection exists and create it if it does not
 
-        if database_connection is not None:
+        if database_connection is not None and record_modified:
             if (
                 algorithm_collection_name
                 not in database_connection.list_collections()
@@ -250,25 +446,135 @@ class AlgorithmDeployer:
                 database_connection.create_collections(
                     [algorithm_collection_name]
                 )
-            algorithm_key = f"{self.algorithm_id}~{self.algorithm_name}~{self.algorithm_major_version}~{self.algorithm_minor_version}"
+            algorithm_key = f"{algorithm_id}~{self.algorithm_name}~{self.algorithm_major_version}"
             database_connection.put_objects(
                 algorithm_collection_name,
                 [algorithm_key],
                 [algorithm_json],
             )
         self.logger.info(f"Stored algorithm json: {algorithm_json}")
-        return self.algorithm_id
+        return algorithm_id
 
-    def _store_algorithm_module(
+    def _insert_new_minor_version_to_existing_algorithm(
+        self,
+        existing_algorithm_record: dict,
+        module_id: str,
+        assets_dict: dict,
+    ) -> tuple[dict, bool]:
+        """
+        Insert a new minor version to an existing algorithm record. Checks if either
+        the module id or assets dictionary are different from the latest minor version.
+
+        Parameters
+        ----------
+        existing_algorithm_record : dict
+            The existing algorithm record.
+        module_id : str
+            The module id.
+        assets_dict : dict
+            The assets dictionary.
+        Returns
+        -------
+        tuple[dict, bool]
+            The modified algorithm record and a boolean indicating if a new minor
+            version was inserted.
+        """
+        modified_algorithm_json = copy.deepcopy(existing_algorithm_record)
+
+        # Ensure structure exists
+        modified_algorithm_json.setdefault("algorithm_minor_version", {})
+        if "latest_algorithm_minor_version" not in modified_algorithm_json:
+            # fresh doc: start at -1 so the first insert becomes 0
+            modified_algorithm_json["latest_algorithm_minor_version"] = -1
+            latest_minor_version_record = {}
+        else:
+            latest_minor_version_record = modified_algorithm_json[
+                "algorithm_minor_version"
+            ][str(modified_algorithm_json["latest_algorithm_minor_version"])]
+
+        # get the latest minor version
+        latest_minor_version = modified_algorithm_json[
+            "latest_algorithm_minor_version"
+        ]
+
+        if (
+            latest_minor_version_record.get("module_id", None) == module_id
+            and latest_minor_version_record.get("assets", None) == assets_dict
+        ):
+            # no changes, do not insert new minor version
+            self.logger.info(
+                "The module id and assets dictionary are the same as the latest minor version. Not inserting a new minor version."
+            )
+            return modified_algorithm_json, False
+        else:
+            # insert new minor version if either module id or assets dict differ from latest
+            new_minor_version = str(int(latest_minor_version) + 1)
+            modified_algorithm_json["latest_algorithm_minor_version"] = (
+                new_minor_version
+            )
+            modified_algorithm_json["algorithm_minor_version"][
+                new_minor_version
+            ] = {
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "module_id": module_id,
+                "assets": assets_dict,
+            }
+            return modified_algorithm_json, True
+
+    def _self_find_existing_algorithm_by_name_and_version(
+        self,
+        database_connection: BaseConnection.BaseConnection,
+        algorithm_name: str,
+        algorithm_major_version: str,
+    ) -> dict | None:
+        """
+        Find an existing algorithm by name and major version.
+
+        Parameters
+        ----------
+        database_connection : BaseConnection.BaseConnection
+            The database connection object.
+
+        algorithm_name : str
+            The name of the algorithm.
+
+        algorithm_major_version : str
+            The major version of the algorithm.
+
+        Returns
+        -------
+        dict | None
+            The existing algorithm record if found, None otherwise.
+
+        """
+
+        if "algorithm-store" not in database_connection.list_collections():
+            return None
+
+        algorithm_keys = database_connection.list_objects("algorithm-store")
+        for algorithm in algorithm_keys:
+            key = algorithm["Key"]
+            parts = key.split("~")
+            if len(parts) >= 2:
+                name = parts[1]
+                major_version = parts[2]
+                if (
+                    name == algorithm_name
+                    and major_version == algorithm_major_version
+                ):
+                    return json.loads(
+                        database_connection.get_objects(
+                            "algorithm-store", [key]
+                        )[0]
+                    )
+        return None
+
+    def _create_algorithm_module(
         self,
         path_to_algorithm_directory: str,
-        database_connection: BaseConnection.BaseConnection | None = None,
-        separate_runner_path: str | None = None,
         check_importable: bool = False,
         obfuscate: bool = False,
-        hash_module: bool = False,
-        collection_name: str = "module-store",
-    ) -> str | bool:
+    ) -> tuple[str, bytes]:
         """
         Detects all .py files in the algorithm directory, zips them as a python
         module and stores them in the module collection.
@@ -281,10 +587,6 @@ class AlgorithmDeployer:
         database_connection : BaseConnection.BaseConnection | None
             The database connection object.
 
-        separate_runner_path : str | None, optional
-            The path to the runner file. Use this if the runner file is not in
-            the root of the algorithm directory. The default is None.
-
         check_importable : bool, optional
             Whether to check if the module is importable by performing an import
             test. The default is False.
@@ -292,19 +594,13 @@ class AlgorithmDeployer:
         obfuscate : bool, optional
             Whether to obfuscate the .py files. The default is False.
 
-        hash_module : bool, optional
-            Whether to hash the module. Will check if the module already exists
-            by comparing the etag hash. If the module already exists, it will
-            reuse it instead of uploading. The default is False.
-
-        collection_name : str, optional
-            The name of the collection to store the module. The default is
-            "module-store".
-
         Returns
         -------
-        str | bool
+        str
             The module id.
+
+        bytes
+            The module bytes.
 
         Raises
         ------
@@ -312,38 +608,39 @@ class AlgorithmDeployer:
             if Runner.py not found or import failed
         """
 
-        module_id = self.generate_uuid()
-
         # get all the .py files in the algorithm directory
-        py_files = self.find_py_files(path_to_algorithm_directory)
+        py_files, _ = self.find_py_files(path_to_algorithm_directory)
         py_files_with_relative_path = [
             os.path.relpath(py_file, path_to_algorithm_directory)
             for py_file in py_files
         ]
 
         # check if Runner.py is in the root of the algorithm directory
-        if (
-            "Runner.py" not in py_files_with_relative_path
-            and separate_runner_path is None
-        ):
+        if "Runner.py" not in py_files_with_relative_path:
             raise ValueError(
-                "Runner.py not found in the root of the algorithm directory and separate_runner_path is not provided."
+                "Runner.py not found in the root of the algorithm directory."
             )
 
-        # add the separate runner path to the list of py files if it is not None
-        if separate_runner_path is not None:
-            py_files.append(separate_runner_path)
-            py_files_with_relative_path.append("Runner.py")
-
         with tempfile.TemporaryDirectory() as temp_dir:
-            module_path = os.path.join(temp_dir, "module")
+            # Build under a stable staging package name first. We compute module_id
+            # only after all code-transforming steps are applied.
+            staging_package_name = "__module__"
+            root_module_dir = os.path.join(temp_dir, "module_build")
+            module_path = os.path.join(root_module_dir, staging_package_name)
+            os.makedirs(module_path, exist_ok=True)
+            # create __init__.py file in the root of the module directory
+            init_file_path = os.path.join(root_module_dir, "__init__.py")
+            with open(init_file_path, "w", encoding="utf-8") as f:
+                f.write("# Init file for the module\n")
+
             # copy the .py files to the temporary directory while preserving the directory structure
             for py_file, py_file_with_relative_path in zip(
                 py_files, py_files_with_relative_path
             ):
                 os.makedirs(
                     os.path.join(
-                        module_path, os.path.dirname(py_file_with_relative_path)
+                        module_path,
+                        os.path.dirname(py_file_with_relative_path),
                     ),
                     exist_ok=True,
                 )
@@ -352,279 +649,71 @@ class AlgorithmDeployer:
                     os.path.join(module_path, py_file_with_relative_path),
                 )
 
-            # replace file names with uuids and update imports
-            import_list = self._rename_folders_and_file_with_unique_ids(
-                module_path, mode="uuid"
-            )
-            runner_path = os.path.join(module_path, "Runner.py")
+            relativize_intra_package_imports(module_path)
 
-            # replace the imports in the runner file with random names
-            self._replace_imports_in_runner_file(runner_path, import_list)
+            module_py_files, _ = self.find_py_files(module_path)
 
-            # load the .py files again after renaming
-            py_files = self.find_py_files(module_path)
-            py_files_with_relative_path = [
-                os.path.relpath(py_file, module_path) for py_file in py_files
-            ]
+            # check if __init__.py exists in the module_path
+            if not os.path.exists(os.path.join(module_path, "__init__.py")):
+                # create an empty __init__.py file
+                with open(
+                    os.path.join(module_path, "__init__.py"),
+                    "w",
+                    encoding="utf-8",
+                ) as f:
+                    f.write("# Init file for the package\n")
+
+            # load the content of the __init__.py file and append a runner import statement
+            with open(
+                os.path.join(module_path, "__init__.py"),
+                "r",
+                encoding="utf-8",
+            ) as f:
+                init_content = f.read()
+            init_content += "\nfrom .Runner import Runner\n"
+            with open(
+                os.path.join(module_path, "__init__.py"),
+                "w",
+                encoding="utf-8",
+            ) as f:
+                f.write(init_content)
 
             if obfuscate:
                 # obfuscate the .py files
                 # TODO: implement obfuscation
                 # for now, minimize the .py files
-                self._minimalize_py_files(py_files)
+                self._minimalize_py_files(module_py_files)
+
+            # Compute module id from transformed sources to ensure packaging options
+            # (e.g., obfuscation) affect deduplication.
+            module_id = self.get_py_files_hashes(
+                module_py_files, base_directory=module_path
+            )
+
+            final_module_path = os.path.join(root_module_dir, module_id)
+            os.rename(module_path, final_module_path)
 
             # create a temporary zip file of the temporary directory
-            shutil.make_archive(module_path, "zip", module_path)
+            shutil.make_archive(root_module_dir, "zip", root_module_dir)
 
             if check_importable:
                 importable = self.check_if_zip_is_importable(
-                    module_path + ".zip"
+                    root_module_dir + ".zip", module_id
                 )
                 if not importable:
                     raise ValueError(
                         "The current environment cannot import the the algorithm module. Check the above logs for more details about the ImportError cause. This check can be disabled by setting check_importable to False in the affected algorithm's pyproject.toml file."
                     )
 
-            zip_bytes = open(module_path + ".zip", "rb").read()
-            # store the zip file in the module-store collection
-            if database_connection is not None:
-                if (
-                    collection_name
-                    not in database_connection.list_collections()
-                ):
-                    database_connection.create_collections([collection_name])
+            with open(root_module_dir + ".zip", "rb") as f:
+                module_bytes = f.read()
 
-                if hash_module:
-                    module_id = (
-                        database_connection.put_objects_with_duplicity_check(
-                            collection_name,
-                            [module_id],
-                            [zip_bytes],
-                        )[0]
-                    )
-                else:
-                    database_connection.put_objects(
-                        collection_name,
-                        [module_id],
-                        [zip_bytes],
-                    )
-        return module_id
-
-    def _replace_imports_in_runner_file(
-        self, runner_file_path: str, list_of_imports_to_process: list[str]
-    ) -> None:
-        """
-        This method replaces the imports in runner.py file with random names. e.g.
-        from utils import some_function -> from utils import some_function as
-        pcb1234567890. This is necessary to avoid conflicts in local dependencies
-        when multiple modules with conflicting names are imported during server
-        runtime.
-
-        Parameters
-        ----------
-        runner_file_path : str
-            The path to the runner file.
-
-        list_of_imports_to_process : list[str]
-            The list of possible imports to process. The imports in the runner file
-            that are not in this list will not be processed.
-
-        Returns
-        -------
-        None
-        """
-
-        # read the runner file
-        with open(runner_file_path, "r", encoding="utf-8") as f:
-            runner_content = f.read()
-
-        # parse the code as an abstract syntax tree
-        ast_parsed = ast.parse(runner_content)
-        aliases = {}
-
-        # get the imports and their aliases and replace them with randomized aliases
-        for node in ast.walk(ast_parsed):
-            # get the imports and their aliases
-            if isinstance(node, ast.Import):
-                for alias in node.names:
-                    if alias.name in list_of_imports_to_process:
-                        random_alias = (
-                            "pcb_import_"
-                            + self.generate_uuid().replace("-", "")
-                        )
-                        if alias.asname is None:
-                            aliases[alias.name] = random_alias
-                            alias.asname = random_alias
-                        else:
-                            aliases[alias.asname] = random_alias
-                            alias.asname = random_alias
-            # get the imports from a module and their aliases
-            if isinstance(node, ast.ImportFrom):
-                if node.module in list_of_imports_to_process:
-                    for alias in node.names:
-                        random_alias = (
-                            "pcb_import_"
-                            + self.generate_uuid().replace("-", "")
-                        )
-                        if alias.asname is None:
-                            aliases[alias.name] = random_alias
-                            alias.asname = random_alias
-                        else:
-                            aliases[alias.asname] = random_alias
-                            alias.asname = random_alias
-
-        # replace the calls with the random names in aliases dict
-        for node in ast.walk(ast_parsed):
-            if isinstance(node, ast.Call):
-                if node.func in aliases:
-                    node.func = aliases[node.func]
-            if isinstance(node, ast.Name):
-                if node.id in aliases:
-                    node.id = aliases[node.id]
-
-        # unparsing the ast to get the updated code
-        ast_unparsed = ast.unparse(ast_parsed)
-
-        # write the updated code to the runner file
-        with open(runner_file_path, "w", encoding="utf-8") as f:
-            f.write(ast_unparsed)
-
-    def _rename_folders_and_file_with_unique_ids(
-        self, module_path: str, mode: str = "md5"
-    ) -> list:
-        """
-        This method iterates through the py files in the module directory and
-        replaces the file names with unique ids. It also updates the relative
-        imports in the files. This is necessary to avoid conflicts in local
-        dependencies when multiple modules with the same names are imported during
-        server runtime. The runner file and special files (e.g. __init__.py) are
-        kept unchanged.
-
-        Parameters
-        ----------
-        module_path : str
-            The path to the module directory.
-
-        mode : str, optional
-            The mode of the renaming. The default is "md5", which renames the
-            files with an md5 hash of the file contents. The other option is "uuid",
-            which renames the files with a uuid.
-
-        Returns
-        -------
-        list
-            list of possible imports
-        """
-
-        # rename the directories
-        original_files = self.find_py_files(module_path)
-        original_files_with_rel_path = [
-            os.path.relpath(file, module_path) for file in original_files
-        ]
-
-        new_files = self._rename_all_subdirectories(
-            module_path, original_files, mode=mode
-        )
-        # files = self.find_py_files(module_path)
-        files_with_rel_path = [
-            os.path.relpath(file, module_path) for file in new_files
-        ]
-
-        # rename the files
-        dict_file_name_to_random_filename = self._rename_all_files(
-            module_path, files_with_rel_path, mode=mode
-        )
-
-        original_to_new_file_name = {}
-        for i in range(len(original_files_with_rel_path)):
-            original_to_new_file_name[original_files_with_rel_path[i]] = list(
-                dict_file_name_to_random_filename.values()
-            )[i]
-
-        # get possible imports
-        possible_old_import_list = []
-        possible_new_import_list = []
-        for old_file_name, new_file_name in original_to_new_file_name.items():
-            old_modules = old_file_name.split(os.path.sep)
-            new_modules = new_file_name.split(os.path.sep)
-            # re
-            possible_old_imports = [
-                ".".join(old_modules[:i])
-                for i in range(1, len(old_modules) + 1)
-            ]
-            possible_new_imports = [
-                ".".join(new_modules[:i])
-                for i in range(1, len(new_modules) + 1)
-            ]
-
-            possible_old_imports += [
-                ".".join(old_modules[-i:])
-                for i in range(1, len(old_modules) + 1)
-            ]
-            possible_new_imports += [
-                ".".join(new_modules[-i:])
-                for i in range(1, len(new_modules) + 1)
-            ]
-            if len(possible_old_imports) > 0:
-                possible_old_import_list.append(possible_old_imports)
-                possible_new_import_list.append(possible_new_imports)
-
-        # flatten the lists
-        possible_old_import_list = [
-            item for sublist in possible_old_import_list for item in sublist
-        ]
-        possible_new_import_list = [
-            item for sublist in possible_new_import_list for item in sublist
-        ]
-
-        # remove py file extensions
-        possible_old_import_list = [
-            item.replace(".py", "") for item in possible_old_import_list
-        ]
-        possible_new_import_list = [
-            item.replace(".py", "") for item in possible_new_import_list
-        ]
-        # get the unique imports
-        possible_old_import_list = list(dict.fromkeys(possible_old_import_list))
-        possible_new_import_list = list(dict.fromkeys(possible_new_import_list))
-
-        # update the imports
-        for root, _, files in os.walk(module_path):
-            for file in files:
-                if file.endswith(".py"):
-                    file_path = os.path.join(root, file)
-                    with open(file_path, "r", encoding="utf-8") as f:
-                        file_content = f.read()
-                    for old_import, new_import in zip(
-                        possible_old_import_list, possible_new_import_list
-                    ):
-                        # replace typical imports using regex
-                        file_content = re.sub(
-                            r"(?<=import ){}(?= )".format(old_import),
-                            new_import,
-                            file_content,
-                        )
-                        file_content = re.sub(
-                            r"(?<=from ){}(?= )".format(old_import),
-                            new_import,
-                            file_content,
-                        )
-                        # from . import old_import
-                        file_content = re.sub(
-                            r"(?<=from \. import ){}(?= )".format(old_import),
-                            new_import,
-                            file_content,
-                        )
-                    with open(file_path, "w", encoding="utf-8") as f:
-                        f.write(file_content)
-
-        return possible_new_import_list
+        return module_id, module_bytes
 
     def _store_algorithm_assets(
         self,
         path_to_algorithm_directory: str,
         database_connection: BaseConnection.BaseConnection | None = None,
-        hash_assets: bool = False,
         collection_name: str = "asset-store",
     ) -> dict:
         """
@@ -637,11 +726,6 @@ class AlgorithmDeployer:
 
         database_connection : BaseConnection.BaseConnection | None
             The database connection object.
-
-        hash_assets : bool, optional
-            Whether to hash the assets. Will check if the assets already exists
-            by comparing the etag hash. If the assets already exists, it will
-            reuse them instead of uploading. The default is False.
 
         collection_name : str, optional
             The name of the collection to store the assets. The default is
@@ -668,7 +752,6 @@ class AlgorithmDeployer:
         for file, relative_file in zip(
             other_than_py_files, other_than_py_files_with_relative_path
         ):
-            file_id = self.generate_uuid()
             with open(file, "rb") as f:
                 file_bytes = f.read()
 
@@ -678,26 +761,30 @@ class AlgorithmDeployer:
                     not in database_connection.list_collections()
                 ):
                     database_connection.create_collections([collection_name])
-                if hash_assets:
-                    file_id = (
-                        database_connection.put_objects_with_duplicity_check(
-                            collection_name,
-                            [file_id],
-                            [file_bytes],
-                        )[0]
-                    )
-                    assets_dict[
-                        self.process_path_to_dict_key(relative_file)
-                    ] = file_id
-                else:
+
+                file_hash = hashlib.md5(file_bytes).hexdigest()
+
+                # check if the file already exists
+                file_exists = database_connection.check_objects_exist(
+                    collection_name, [file_hash]
+                )[0]
+
+                if not file_exists:
                     database_connection.put_objects(
                         collection_name,
-                        [file_id],
+                        [file_hash],
                         [file_bytes],
                     )
-                    assets_dict[
-                        self.process_path_to_dict_key(relative_file)
-                    ] = file_id
+                    self.logger.info(
+                        f"Uploaded new asset {relative_file} to {collection_name}"
+                    )
+                else:
+                    self.logger.info(
+                        f"Asset {relative_file} already exists in {collection_name}. Reusing existing asset."
+                    )
+                assets_dict[self.process_path_to_dict_key(relative_file)] = (
+                    file_hash
+                )
         return assets_dict
 
     @staticmethod
@@ -722,10 +809,7 @@ class AlgorithmDeployer:
             slash.
 
         """
-        if path[0] == "\\":
-            path = path[1:]
-        path = path.replace("\\", "/")
-        return path
+        return path.lstrip("/\\").replace("\\", "/")
 
     def _minimalize_py_files(self, py_files: list[str]) -> None:
         """
@@ -748,17 +832,22 @@ class AlgorithmDeployer:
             minified_content = python_minifier.minify(
                 file_content, remove_literal_statements=True
             )
-            with open(py_file, "w") as f:
+            with open(py_file, "w", encoding="utf-8") as f:
                 f.write(minified_content)
 
     @staticmethod
-    def check_if_zip_is_importable(path_to_zip: str) -> bool:
+    def check_if_zip_is_importable(path_to_zip: str, module_name: str) -> bool:
         """
-        Check if a a zipped module is importable.
+        Check if the zipped compox module is importable. This serves as a sanity
+        check that the environment where the algorithm is being deployed has the
+        necessary dependencies available.
+
         Parameters
         ----------
         path_to_zip : str
             The path to the zip file.
+        module_name : str
+            The name of the module.
 
         Returns
         -------
@@ -766,17 +855,43 @@ class AlgorithmDeployer:
             True if the module is importable, False otherwise.
 
         """
+        check_script = (
+            "import importlib\n"
+            "import sys\n"
+            "\n"
+            "path_to_zip = sys.argv[1]\n"
+            "module_name = sys.argv[2]\n"
+            "\n"
+            "sys.path.insert(0, path_to_zip)\n"
+            "module = importlib.import_module(module_name)\n"
+            "runner = getattr(module, 'Runner', None)\n"
+            "if runner is None:\n"
+            "    raise AttributeError('Runner class not found in module')\n"
+            "runner()\n"
+        )
+
         try:
-            sys.path.insert(0, path_to_zip)
-            importer = zipimport.zipimporter(path_to_zip)
-            spec = importlib.util.spec_from_loader("Runner", importer)
-            if spec is not None:
-                module = importlib.util.module_from_spec(spec)
-                importer.exec_module(module)
-            return True
-        except ImportError as e:
-            logger.error(f"ImportError: {e}")
+            result = subprocess.run(
+                [sys.executable, "-c", check_script, path_to_zip, module_name],
+                capture_output=True,
+                text=True,
+                timeout=20,
+                check=False,
+            )
+        except Exception as e:
+            logger.error(
+                f"ImportError: failed to run import check subprocess: {e}"
+            )
             return False
+
+        if result.returncode != 0:
+            stderr = (result.stderr or "").strip()
+            stdout = (result.stdout or "").strip()
+            msg = stderr if stderr else stdout
+            logger.error(f"ImportError: {msg}")
+            return False
+
+        return True
 
     @staticmethod
     def calculate_etag(file: bytes) -> str:
@@ -800,7 +915,9 @@ class AlgorithmDeployer:
         return '"{}"'.format(md5s.hexdigest())
 
     @staticmethod
-    def find_py_files(directory: str, ignore_pycache: bool = True) -> list[str]:
+    def find_py_files(
+        directory: str, ignore_pycache: bool = True
+    ) -> tuple[list[str], str]:
         """
         Find all the .py files in a directory recursively.
 
@@ -814,23 +931,65 @@ class AlgorithmDeployer:
 
         Returns
         -------
-        list[str]
-            The list of .py files.
+        tuple[list[str], str]
+            A tuple containing a list of py files in a directory and a string
+            representing their combined hash.
 
         """
         py_files = []
 
-        for root, _, _ in os.walk(directory):
+        ignored_dirs = {".git"}
+        if ignore_pycache:
+            ignored_dirs |= AlgorithmDeployer._IGNORED_METADATA_DIRS - {
+                ".git"
+            }
+
+        for root, dirs, _ in os.walk(directory):
+            dirs[:] = [d for d in dirs if d not in ignored_dirs]
             py_files.extend(glob.glob(os.path.join(root, "*.py")))
 
-        # remove the __pycache__ directory if it exists
-        if ignore_pycache:
-            py_files = [
-                file
-                for file in py_files
-                if "__pycache__" not in file.split(os.path.sep)
-            ]
-        return py_files
+        files_hash = AlgorithmDeployer.get_py_files_hashes(
+            py_files, base_directory=directory
+        )
+        return py_files, files_hash
+
+    @staticmethod
+    def get_py_files_hashes(
+        py_files: list[str], base_directory: str | None = None
+    ) -> str:
+        """
+        Get a combined hash of all the .py files.
+        Parameters
+        ----------
+        py_files : list[str]
+            The list of .py files.
+        Returns
+        -------
+        str
+            The combined md5 hash of all the .py files.
+        """
+        combined_md5 = hashlib.md5()
+
+        files_with_rel_paths: list[tuple[str, str]] = []
+        for py_file in py_files:
+            if base_directory is not None:
+                rel_path = os.path.relpath(py_file, base_directory)
+            else:
+                rel_path = os.path.basename(py_file)
+            # Normalize separators to make hash stable across platforms.
+            normalized_rel_path = pathlib.Path(rel_path).as_posix()
+            files_with_rel_paths.append((normalized_rel_path, py_file))
+
+        for normalized_rel_path, py_file in sorted(files_with_rel_paths):
+            combined_md5.update(normalized_rel_path.encode("utf-8"))
+            combined_md5.update(b"\x00")
+            with open(py_file, "rb") as f:
+                while True:
+                    data = f.read(65536)
+                    if not data:
+                        break
+                    combined_md5.update(data)
+        return combined_md5.hexdigest()
 
     @staticmethod
     def find_other_than_py_files(
@@ -860,8 +1019,15 @@ class AlgorithmDeployer:
         """
         other_than_py_files = []
 
+        ignored_dirs = {".git"}
+        if ignore_pycache:
+            ignored_dirs |= AlgorithmDeployer._IGNORED_METADATA_DIRS - {
+                ".git"
+            }
+
         # get all the files other than .py files in the algorithm directory
-        for root, _, _ in os.walk(directory):
+        for root, dirs, _ in os.walk(directory):
+            dirs[:] = [d for d in dirs if d not in ignored_dirs]
             other_than_py_files.extend(glob.glob(os.path.join(root, "*")))
 
         # remove the .py files from the list
@@ -873,19 +1039,14 @@ class AlgorithmDeployer:
             file for file in other_than_py_files if not os.path.isdir(file)
         ]
 
-        # remove the __pycache__ directory if it exists
-        if ignore_pycache:
-            other_than_py_files = [
-                file
-                for file in other_than_py_files
-                if "__pycache__" not in file.split(os.path.sep)
-            ]
-
         if ignore_gitignore:
             other_than_py_files = [
                 file
                 for file in other_than_py_files
-                if ".gitignore" not in file.split(os.path.sep)
+                if not (
+                    set(file.split(os.path.sep))
+                    & AlgorithmDeployer._IGNORED_METADATA_FILES
+                )
             ]
 
         return other_than_py_files
@@ -917,208 +1078,10 @@ class AlgorithmDeployer:
         else:
             raise ValueError("uuid version must be 1 or 4")
 
-    def _rename_all_subdirectories(
-        self, parent_dir: str, original_files: list, mode: str = "uuid"
-    ) -> list:
-        """
-        Rename all the subdirectories in a directory with either a uuid or an md5
-        hash of the directory contents. This is necessary to avoid conflicts in
-        local dependencies when multiple modules with the same names are imported
-        during server runtime.
-
-        Parameters
-        ----------
-        parent_dir : str
-            The parent directory.
-
-        original_files : list
-            The list of file paths in the directory.
-
-        mode : str, optional
-            The mode of the renaming. The default is "uuid", which renames the
-            subdirectories with a uuid. The other option is "md5", which renames
-            the subdirectories with an md5 hash of the directory contents.
-
-        Returns
-        -------
-        list
-            The list of file paths in the directory with the updated relative
-            paths.
-
-        """
-
-        # if mode is md5, first compute the hashes before renaming
-        if mode == "md5":
-            hashes = {}
-            for root, dirs, files in os.walk(parent_dir, topdown=False):
-                for dir_name in dirs:
-                    old_path = os.path.join(root, dir_name)
-                    hashes[old_path] = self.hash_directory(old_path)
-
-        for root, dirs, files in os.walk(parent_dir, topdown=False):
-            for dir_name in dirs:
-                old_path = os.path.join(root, dir_name)
-                if mode == "uuid":
-                    random_name = "pcb" + self.generate_uuid()
-                elif mode == "md5":
-                    random_name = "pcb" + hashes[old_path]
-                # remove - and _ from the random name
-                random_name = random_name.replace("-", "").replace("_", "")
-                new_path = os.path.join(root, random_name)
-                os.rename(old_path, new_path)
-
-                # add trailing slash to the new path
-                # this is necessary to not replace file names with the same prefix
-                new_path += os.path.sep
-                old_path += os.path.sep
-                # update the relative paths
-                for i in range(len(original_files)):
-                    original_files[i] = original_files[i].replace(
-                        old_path, new_path
-                    )
-        return original_files
-
-    def _rename_all_files(
-        self,
-        module_path: str,
-        files_with_relative_paths: list,
-        mode: str = "uuid",
-    ) -> dict:
-        """
-        Rename all the files in a directory with either a uuid or an md5 hash of
-        the file contents. This is necessary to avoid conflicts in local
-        dependencies when multiple modules with the same names are imported during
-        server runtime.
-
-        Parameters
-        ----------
-        module_path : str
-            The path to the module directory.
-
-        files_with_relative_paths : list
-            The list of file paths in the directory.
-
-        mode : str, optional
-            The mode of the renaming. The default is "uuid", which renames the
-            files with a uuid. The other option is "md5", which renames the files
-            with an md5 hash of the file contents.
-
-        Returns
-        -------
-        dict
-            A dictionary with the original file names as keys and the new file
-            names as values.
-
-        Raises
-        ------
-        ValueError
-            If the mode of the renaming is not supported.
-        """
-        dict_file_name_to_random_filename = {}
-        for py_file_with_relative_path in files_with_relative_paths:
-            # skip renaming the runner file and special files (e.g. __init__.py)
-            if os.path.basename(py_file_with_relative_path) == "Runner.py":
-                dict_file_name_to_random_filename[
-                    py_file_with_relative_path
-                ] = py_file_with_relative_path
-            elif "__" in os.path.basename(py_file_with_relative_path):
-                dict_file_name_to_random_filename[
-                    py_file_with_relative_path
-                ] = py_file_with_relative_path
-            else:
-                if mode == "uuid":
-                    random_name = "pcb" + self.generate_uuid() + ".py"
-                    random_name = random_name.replace("-", "").replace("_", "")
-                elif mode == "md5":
-                    random_name = (
-                        "pcb"
-                        + self.hash_py_file(
-                            os.path.join(
-                                module_path, py_file_with_relative_path
-                            )
-                        )
-                        + ".py"
-                    )
-                    random_name = random_name.replace("-", "").replace("_", "")
-                else:
-                    raise ValueError(f"Unsupported mode: {mode}")
-
-                dict_file_name_to_random_filename[
-                    py_file_with_relative_path
-                ] = os.path.join(
-                    os.path.dirname(py_file_with_relative_path),
-                    random_name,
-                )
-        # rename the files
-        for (
-            py_file_with_relative_path,
-            random_filename,
-        ) in dict_file_name_to_random_filename.items():
-            os.rename(
-                os.path.join(module_path, py_file_with_relative_path),
-                os.path.join(module_path, random_filename),
-            )
-
-        return dict_file_name_to_random_filename
-
-    @staticmethod
-    def hash_directory(directory: str) -> str:
-        """
-        Compute the md5 hash of a directory based on its contents.
-
-        Parameters
-        ----------
-        directory : str
-            The path to the directory.
-
-        Returns
-        -------
-        str
-            The md5 hash.
-
-        """
-        md5 = hashlib.md5()
-        for root, dirs, files in os.walk(directory):
-            for filename in files:
-                filepath = os.path.join(root, filename)
-                with open(filepath, "rb") as f:
-                    while True:
-                        data = f.read(65536)  # 64k chunks
-                        if not data:
-                            break
-                        md5.update(data)
-        return md5.hexdigest()
-
-    @staticmethod
-    def hash_py_file(file: str) -> str:
-        """
-        Compute the md5 hash of a .py file.
-
-        Parameters
-        ----------
-        file : str
-            The path to the file.
-
-        Returns
-        -------
-        str
-            The md5 hash.
-
-        """
-        md5 = hashlib.md5()
-        with open(file, "rb") as f:
-            while True:
-                data = f.read(65536)
-
-                if not data:
-                    break
-                md5.update(data)
-        return md5.hexdigest()
-
 
 if __name__ == "__main__":
 
     algorithm_deployer = AlgorithmDeployer(
-        "C:/Users/Jan Matula/Work/python-computing-backend/algorithms/sam2_segmentation"
+        "C:\\Users\\Jan Matula\\Work\\python-computing-backend\\compox\\algorithms\\test_training_runner"
     )
     algorithm_deployer.store_algorithm(database_connection=None)

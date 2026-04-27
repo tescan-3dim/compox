@@ -50,15 +50,17 @@ For the denoising algorithm, we will add a `denoising_weight` parameter that wil
 
 ```toml
 additional_parameters = [
-    {name = "denoising_weight", description = "The weight of the denoising term between 0 and 1. Higher values will result in more denoising, but can distort the image.", config = {type = "float_range", default = 0.1, min = 0.0, max = 1.0, step = 0.05, adjustable = true}}
+    {name = "denoising_weight", displayed_name = "Denoising weight", description = "The weight of the denoising term between 0 and 1. Higher values will result in more denoising, but can distort the image.", config = {type = "float_range", default = 0.1, min = 0.0, max = 1.0, step = 0.05, decimal_precision = 2, adjustable = true}}
 ]
 ```
 
 To see more information about the possible parameter types see the [How to create an algorithm module](../README.md/#additional-parameters) section. 
 
+`displayed_name` is optional and controls the human-friendly UI label. `decimal_precision` is optional and only valid for float-based parameter types.
+
 ## The algorithm dependencies
 
-The algorithm can use any libraries from the global compox environment. Additional dependencies can be provided as python submodules. Here we will use the `numpy` library to handle the image data. We also implemented a simple `image_denoising` module that contains an `__init__.py` file and a `denosing_utils.py` file. The `denoising_utils.py` file contains the `denoise_image` function that performs the denoising of the images. The `image_denoising` module should be placed in the root directory of the algorithm.
+The algorithm can use any libraries from the global compox environment. Additional dependencies can be provided as python submodules. Here we will use the `scikit-image` and `numpy` libraries to handle the image data. We also implemented a simple `image_denoising` module that contains an `__init__.py` file and a `denosing_utils.py` file. The `denoising_utils.py` file contains the `denoise_image` function that performs the denoising of the images. The `image_denoising` module should be placed in the root directory of the algorithm.
 
 ```python
 from skimage.restoration import (
@@ -120,7 +122,7 @@ def load_assets(self):
 Next, we can implement the `inference` method, where we perform the denoising of the images. The data will be passed to the `inference` method as a numpy array. The `inference` method should return a numpy array with the denoised images of the same shape as the input images. You can use the `self.log_message` method to log messages to the compox log. The `self.set_progress` method can be used to update the progress with a float value between 0 and 1.
 
 ```python
-def inference(self, data: np.ndarray, args: dict = {}) -> np.ndarray:
+def inference(self, data: np.ndarray, args: dict | None = None) -> np.ndarray:
     """
     Run the inference.
 
@@ -172,4 +174,12 @@ To customize the behavior of fetching and processing the input data, and postpro
 
 ## Deploying the algorithm
 
-To deploy the finished algorithm, you can use the `pdm run deployment template_denoising_algorithm` command. This command will deploy the algorithm to the compox. The algorithm can also be added through compox systray interface by clicking the "Add Algorithm" button and selecting the algorithm directory.
+To deploy the finished algorithm, use:
+
+```bash
+compox deploy-algorithms --config app_server.yaml --name template_denoising_algorithm
+```
+
+This deploys the algorithm to Compox. The algorithm can also be added through
+the Compox systray interface by clicking `Add Algorithm` and selecting the
+algorithm directory.

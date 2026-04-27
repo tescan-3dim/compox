@@ -88,7 +88,6 @@ class AWSSettings(BaseModel):
     s3_endpoint_url: str | None = None
     aws_region: str | None = None
     s3_domain_name: str | None = None
-    
 
 class StorageSettings(BaseModel):
     """
@@ -98,6 +97,10 @@ class StorageSettings(BaseModel):
     model_config = ConfigDict(extra='forbid')
     collection_prefix: str = ""
     data_store_expire_days: int = 1
+    execution_store_expire_days: int = 30
+    training_store_expire_days: int = 30
+    deploy_store_expire_days: int = 30
+    stop_requests_expire_days: int = 7
     access_key_id: str | None = generate_uuid(version=4)
     secret_access_key: str | None  = generate_uuid(version=4)
     backend_settings: Annotated[
@@ -178,6 +181,21 @@ class MiddlewareSettings(BaseModel):
     max_age: int = 3600
 
 
+class LoggingSettings(BaseModel):
+    """
+    Pydantic model for logging settings.
+    The model is configured to forbid extra fields that are not defined in the model.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+    console_level: Literal[
+        "TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"
+    ] = "INFO"
+    file_level: Literal[
+        "TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"
+    ] = "INFO"
+
+
 class Settings(BaseSettings, cli_parse_args=_PARSE_CLI):
     """
     Pydantic model for Compox settings.
@@ -195,6 +213,7 @@ class Settings(BaseSettings, cli_parse_args=_PARSE_CLI):
     inference: InferenceSettings = InferenceSettings()
     ssl: SSLSettings = SSLSettings()
     middleware: MiddlewareSettings = MiddlewareSettings()
+    logging: LoggingSettings = LoggingSettings()
     
     log_path: str = "LOG_DEFAULT:compox.log"
     

@@ -23,7 +23,9 @@ class Runner(Image2SegmentationRunner):
         """
         pass
 
-    def inference(self, data: np.ndarray, args: dict = {}) -> np.ndarray:
+    def inference(
+        self, data: np.ndarray, args: dict | None = None
+    ) -> np.ndarray:
         """
         Run the inference.
 

@@ -158,12 +158,20 @@ def mock_connection():
                         "runner_file": "runner.zip",
                         "runner_class_name": "Runner",
                         "runner_module": "my_module",
-                        "assets": ["asset-1"],
                         "default_device": "cpu",
                         "supported_devices": ["cpu"],
                         "algorithm_name": "test_algorithm",
                         "algorithm_major_version": "1",
-                        "algorithm_minor_version": "0",
+                        "latest_algorithm_minor_version": "0",
+                        "algorithm_minor_version": {
+                            "0": {
+                                "timestamp": "2024-01-01T00:00:00Z",
+                                "module_id": "runner.zip",
+                                "assets": {
+                                    "asset-1": "asset-1",
+                                },
+                            }
+                        },
                     }
                 )
             ]
@@ -190,10 +198,16 @@ def mock_connection():
             else:
                 raise ValueError("Expected bytes for HDF5 data")
 
+    def check_objects_exist(bucket, keys):
+        if bucket == "stop-requests":
+            return [False for _ in keys]
+        return [True for _ in keys]
+
     mock.get_objects.side_effect = get_objects
+    mock.check_objects_exist.side_effect = check_objects_exist
     mock.list_objects.return_value = [
         {
-            "Key": "1~name~1~0"
+            "Key": "1~name~1"
         }  # Simulated key in algorithm-store: <id>~<name>~<major_version>~<minor_version>
     ]
     return mock

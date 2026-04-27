@@ -43,7 +43,7 @@ async def get_all_execution_records(request: Request) -> List[ExecutionRecord]:
             "execution-store", execution_records_ids
         )
         return [ExecutionRecord(**json.loads(obj)) for obj in execution_records]
-    except:
+    except Exception as _:
         return JSONResponse(
             status_code=500,
             content={"message": "Failed to get execution records"},
@@ -78,7 +78,7 @@ async def delete_all_execution_records(request: Request) -> ResponseMessage:
             "execution-store", execution_records_ids
         )
         return ResponseMessage(message="Deleted all execution records")
-    except:
+    except Exception as _:
         return JSONResponse(
             status_code=500,
             content={"message": "Failed to delete execution records"},
@@ -113,7 +113,7 @@ async def delete_execution_record(
     try:
         database_connection.delete_objects("execution-store", [execution_id])
         return ResponseMessage(message="Deleted execution record")
-    except:
+    except Exception as _:
         return JSONResponse(
             status_code=500,
             content={"message": "Failed to delete execution record"},

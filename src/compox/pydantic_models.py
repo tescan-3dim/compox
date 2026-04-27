@@ -4,7 +4,7 @@ All rights reserved
 """
 
 from pydantic import BaseModel, Field
-from typing import List, Union, Optional
+from typing import List, Union, Optional, Dict
 
 from compox.algorithm_utils.AlgorithmConfigSchema import (
     AdditionalParameterSchema,
@@ -65,8 +65,8 @@ class AlgorithmRegisteredResponse(BaseModel):
         The name of the algorithm.
     algorithm_version : str
         The major version of the algorithm.
-    algorithm_minor_version : str
-        The minor version of the algorithm.
+    algorithm_minor_versions : list[str]
+        The minor versions of the algorithm.
     algorithm_input_queue : str
         The input queue of the algorithm.
     algorithm_type : str
@@ -81,19 +81,102 @@ class AlgorithmRegisteredResponse(BaseModel):
         The default device.
     additional_parameters : list[AdditionalParameterSchema]
         The additional parameters.
+    training_parameters : list[AdditionalParameterSchema]
+        The training parameters.
+    removable : bool
+        Whether the algorithm can be removed via the deploy delete endpoint.
+    exportable : bool
+        Whether the algorithm can be exported.
+    checkpoints : list[str]
+        The list of checkpoint ids associated with the algorithm.
     """
 
     algorithm_id: str
     algorithm_name: str
     algorithm_version: str
-    algorithm_minor_version: str
-    algorithm_input_queue: str
+    algorithm_minor_versions: list[str]
+    latest_algorithm_minor_version: str
     algorithm_type: str
     algorithm_tags: list[str]
     algorithm_description: str
     supported_devices: list[str] = Field(default=[])
     default_device: str
     additional_parameters: list[AdditionalParameterSchema] = Field(default=[])
+    training_parameters: list[AdditionalParameterSchema] = Field(default=[])
+    removable: bool = Field(default=False)
+    exportable: bool = Field(default=True)
+
+
+class AlgorithmDeployResponse(BaseModel):
+    """
+    Algorithm deploy response model.
+
+    Attributes
+    ----------
+    algorithm_id : str
+        The id of the algorithm.
+    algorithm_name : str
+        The name of the algorithm.
+    algorithm_major_version : str
+        The major version of the algorithm.
+    algorithm_minor_version : str
+        The minor version of the algorithm.
+    """
+
+    algorithm_id: str
+    algorithm_name: str
+    algorithm_major_version: str
+    algorithm_minor_version: str
+
+
+class DeployResponse(BaseModel):
+    """
+    Deploy response model.
+
+    Attributes
+    ----------
+    deploy_id : str
+        The id of the deploy job.
+    """
+
+    deploy_id: str
+
+
+class DeployRecord(BaseModel):
+    """
+    Deploy record model.
+
+    Attributes
+    ----------
+    deploy_id : str
+        The id of the deploy job.
+    status : str
+        The status of the deploy job.
+    path : str
+        The local path used for deploy.
+    algorithm_id : Optional[str]
+        The deployed algorithm id (if available).
+    algorithm_name : Optional[str]
+        The deployed algorithm name (if available).
+    algorithm_major_version : Optional[str]
+        The deployed algorithm major version (if available).
+    time_started : Optional[str]
+        The time the deploy started.
+    time_completed : Optional[str]
+        The time the deploy completed.
+    log : Optional[str]
+        Error or informational log.
+    """
+
+    deploy_id: str
+    status: str
+    path: str
+    algorithm_id: Optional[str] = Field(default=None)
+    algorithm_name: Optional[str] = Field(default=None)
+    algorithm_major_version: Optional[str] = Field(default=None)
+    time_started: Optional[str] = Field(default=None)
+    time_completed: Optional[str] = Field(default=None)
+    log: Optional[str] = Field(default=None)
 
 
 class FailedAlgorithmRegisteredResponse(BaseModel):
@@ -125,6 +208,10 @@ class IncomingExecutionRequest(BaseModel):
         The id of the algorithm.
     input_dataset_ids : list[str]
         The id of the input dataset.
+    checkpoint_id : str
+        The id of the checkpoint, if any.
+    algorithm_minor_version : str
+        The minor version of the algorithm to execute.
     execution_device_override : str
         The execution device override.
     additional_parameters : dict
@@ -135,6 +222,8 @@ class IncomingExecutionRequest(BaseModel):
 
     algorithm_id: str
     input_dataset_ids: list[str]
+    checkpoint_id: Optional[str] = Field(default=None)
+    algorithm_minor_version: Optional[str] = Field(default=None)
     execution_device_override: str = Field(default=None)
     additional_parameters: dict = Field(default={})
     session_token: Union[str, None] = Field(default=None)
@@ -150,10 +239,18 @@ class ExecutionRecord(BaseModel):
         The id of the execution.
     algorithm_id : str
         The id of the algorithm.
+    checkpoint_id : Optional[str]
+        The id of the checkpoint, if any.
+    algorithm_minor_version : Optional[str]
+        The minor version of the executed algorithm.
     input_dataset_ids : list[str]
         The ids of the input datasets.
     execution_device_override : Optional[str]
-        The execution device override.
+        The requested abstract execution device class for the run, e.g. ``cpu``,
+        ``gpu`` or ``mps``.
+    resolved_execution_device : Optional[str]
+        The concrete runtime device Compox resolved for the execution, e.g.
+        ``cpu``, ``cuda`` or ``mps``.
     additional_parameters : dict
         The additional parameters.
     session_token : Union[str, None]
@@ -174,8 +271,11 @@ class ExecutionRecord(BaseModel):
 
     execution_id: str
     algorithm_id: str
+    checkpoint_id: Optional[str] = Field(default=None)
+    algorithm_minor_version: Optional[str] = Field(default=None)
     input_dataset_ids: list[str]
     execution_device_override: Optional[str] = Field(default=None)
+    resolved_execution_device: Optional[str] = Field(default=None)
     additional_parameters: dict
     session_token: Union[str, None]
     output_dataset_ids: list[str]
@@ -210,6 +310,190 @@ class ExecutionLogRecord(BaseModel):
     """
 
     log: str
+
+
+class IncomingTrainingRequest(BaseModel):
+    """
+    Incoming training request model.
+
+    Attributes
+    ----------
+    algorithm_id : str
+        The id of the algorithm to train.
+    training_data : list[str]
+        List of sample ids used as training data.
+    checkpoint_id : str, optional
+        The id of the input checkpoint, if any.
+    algorithm_minor_version : str, optional
+        The minor version of the algorithm to train.
+    tags : list[str]
+        The list of tags associated with the training run.
+    additional_parameters : dict
+        Additional training parameters (e.g., iterations, learning rate, ...).
+    """
+
+    algorithm_id: str
+    training_data: list[str]
+    checkpoint_id: Optional[Union[str, None]] = Field(default=None)
+    algorithm_minor_version: Optional[str] = Field(default=None)
+    tags: list[str] = Field(default=[])
+    additional_parameters: Optional[Union[dict, None]] = Field(default=None)
+
+
+class TrainingResponse(BaseModel):
+    """
+    Training response model.
+
+    Attributes
+    ----------
+    training_id : str
+        The id of the training job.
+    """
+
+    training_id: str
+
+
+class TrainingRecord(BaseModel):
+    """
+    Training record model.
+
+    Attributes
+    ----------
+    training_id: str
+        The id of the training.
+    status : str
+        The status of the training (e.g., running, completed, failed).
+    progress : float
+        The progress of the training in range [0.0–1.0].
+    time_started : str
+        The time the training started.
+    time_completed : str, optional
+        The time the training completed, if available.
+    log : str, optional
+        The log output from the training.
+    training_data : list[str]
+        The list of sample ids used for training.
+    state : dict
+        Training state information, including metrics and losses.
+    output_checkpoint_ids : list[str]
+        The list of produced checkpoint ids.
+    tags : list[str]
+        The list of tags associated with the training run.
+    checkpoint_id : str, optional
+        The id of the input checkpoint, if any.
+    algorithm_minor_version : str, optional
+        The minor version of the algorithm to train.
+    """
+
+    training_id: str
+    algorithm_id: str
+    status: str
+    progress: float
+    time_started: str
+    time_completed: Optional[str] = Field(default=None)
+    log: Optional[str] = Field(default=None)
+    training_data: list[str]
+    additional_parameters: Optional[Union[dict, None]] = Field(default=None)
+    state: dict
+    tags: List[str] = Field(default=[])
+    checkpoint_id: Optional[str] = Field(default=None)
+    algorithm_minor_version: Optional[str] = Field(default=None)
+    output_checkpoint_ids: List[str] = Field(default_factory=list)
+
+
+class AlgorithmCheckpointResponse(BaseModel):
+    """
+    Algorithm checkpoint response model.
+
+    Attributes
+    ----------
+    checkpoint_id : str
+        The id of the checkpoint.
+    """
+
+    checkpoint_id: str
+
+
+class AlgorithmCheckpointRecord(BaseModel):
+    """
+    Algorithm checkpoint record model.
+
+    Attributes
+    ----------
+    checkpoint_id : str
+        The id of the checkpoint.
+    training_id : str
+        The id of the training run that produced this checkpoint.
+    parent_id : str
+        The id of the parent checkpoint, if any.
+    created_at : str
+        The time the checkpoint was created.
+    properties : dict
+        A dictionary of arbitrary properties associated with the checkpoint.
+    tags : list[str]
+        A list of tags associated with the checkpoint.
+    parent_checkpoint_id : Optional[str]
+        The id of the parent checkpoint, if any.
+    """
+
+    checkpoint_id: str
+    training_id: str
+    parent_algorithm_id: str
+    created_at: str
+    properties: dict
+    tags: list[str] = Field(default=[])
+    parent_checkpoint_id: Optional[str] = Field(default=None)
+
+
+class IncomingSampleRequest(BaseModel):
+    """
+    Incoming sample request model.
+
+    Attributes
+    ----------
+    files : list[dict[str, list[str]]]
+        The list of dicts with file paring structure.
+    tags : list[str]
+        The tags associated with the sample.
+    """
+
+    files: list[dict[str, list[str]]]
+    tags: list[str] = Field(default=[])
+
+
+class SampleResponse(BaseModel):
+    """
+    Sample response model.
+
+    Attributes
+    ----------
+    sample_id : str
+        The id of the sample.
+    """
+
+    sample_id: str
+
+
+class SampleRecord(BaseModel):
+    """
+    Sample record model.
+
+    Attributes
+    ----------
+    sample_id : str
+        The id of the sample.
+    files : list[dict[str, list[str]]]
+        The list of dicts with file paring structure.
+    tags : list[str]
+        The tags associated with the sample.
+    time_created : str
+        The time the sample was created.
+    """
+
+    sample_id: str
+    files: list[dict[str, list[str]]]
+    tags: list[str] = Field(default=[])
+    time_created: str
 
 
 class MinioServer(BaseModel):

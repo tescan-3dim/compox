@@ -223,3 +223,44 @@ class BaseConnection:
         NotImplementedError
         """
         raise NotImplementedError
+
+    def get_object_tags(self, collection_name: str, object_name: str) -> dict[str, str]:
+        """
+        Get object tags for a given object in a collection.
+
+        Parameters
+        ----------
+        collection_name : str
+            The collection name.
+        object_name : str
+            The object name.
+
+        Returns
+        -------
+        dict[str, str]
+            The object tags.
+
+        Raises
+        ------
+        NotImplementedError
+        """
+        raise NotImplementedError
+
+    def put_object_tags(self, collection_name: str, object_name: str, tags: dict[str, str]) -> None:
+        """
+        Put object tags for a given object in a collection.
+
+        Parameters
+        ----------
+        collection_name : str
+            The collection name.
+        object_name : str
+            The object name.
+        tags : dict[str, str]
+            The object tags.
+
+        Raises
+        ------
+        NotImplementedError
+        """
+        raise NotImplementedError

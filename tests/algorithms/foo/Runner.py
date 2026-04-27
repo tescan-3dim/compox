@@ -20,7 +20,9 @@ class Runner(BaseRunner):
 
         self.dummy_large_object = "a" * 1024 * 1024 * 1024
 
-    def preprocess(self, input_data: ImageSchema, args: dict = {}) -> tuple:
+    def preprocess(
+        self, input_data: ImageSchema, args: dict | None = None
+    ) -> tuple:
         """Preprocess the request data before feeding into model for inference.
 
         Parameters
@@ -39,7 +41,10 @@ class Runner(BaseRunner):
         return input_data, args
 
     def inference(
-        self, model, preprocessed_data: tuple, args: dict = {}
+        self,
+        model,
+        preprocessed_data: tuple,
+        args: dict | None = None,
     ) -> dict:
         """Run the inference on the preprocessed data.
 
@@ -59,9 +64,13 @@ class Runner(BaseRunner):
         """
 
         self.log_message("Running the Foo inference.")
-        return my_function()
+        out_string = my_function()
+        self.log_message("Inference output: " + out_string)
+        return out_string
 
-    def postprocess(self, inference_output: str, args: dict = {}) -> dict:
+    def postprocess(
+        self, inference_output: str, args: dict | None = None
+    ) -> dict:
         """Postprocess the inference output.
 
         Parameters

@@ -1,0 +1,26 @@
+[project]
+name = "test_training_algorithm"
+version = "1.0.0"
+
+[tool.compox]
+algorithm_type = "Image2Segmentation"
+tags = ["image-segmentation"]
+description = "Performs a binary segmentation of a 3-D image using a skimage filter."
+supported_devices = ["cpu", "gpu"]
+default_device = "cpu"
+additional_parameters = [
+    {name = "thresholding_algorithm", displayed_name = "Thresholding algorithm", description = "The thresholding algorithm to use.", config = {type = "string_enum", default = "otsu", options = ["otsu", "yen", "li", "minimum", "mean", "triangle", "isodata", "local"], adjustable = true}},
+]
+training_parameters = [
+    {name = "learning_rate", displayed_name = "Learning rate", description = "The learning rate for the optimizer.", config = {type = "float", default = 0.001, min = 0.0, max = 1.0, decimal_precision = 4, adjustable = true}},
+    {name = "batch_size", displayed_name = "Batch size", description = "The batch size for training.", config = {type = "int", default = 4, min = 1, max = 64, adjustable = true}},
+    {name = "num_epochs", displayed_name = "Epochs", description = "The number of epochs to train.", config = {type = "int", default = 10, min = 1, max = 1000, adjustable = true}},
+]
+# Whether to check if the module is importable by performing an import
+# test.
+check_importable = true
+
+# Whether to obfuscate the .py files. The obfuscation
+# is not implemented yet. For now, the .py files are minimized using
+# python_minifier.
+obfuscate = true

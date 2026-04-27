@@ -20,6 +20,7 @@ class InMemoryConnection(BaseConnection):
     def __init__(self):
         super().__init__()
         self.store: dict[str, dict[str, bytes]] = {}
+        self.tags: dict[str, dict[str, dict[str, str]]] = {}
 
     def list_collections(self) -> list[str]:
         """
@@ -127,6 +128,7 @@ class InMemoryConnection(BaseConnection):
         collection = self.store.get(collection_name, {})
         for name in object_names:
             collection.pop(name, None)
+            self.tags.get(collection_name, {}).pop(name, None)
 
     def get_objects(
         self, collection_name: str, object_names: list[str]
@@ -168,9 +170,26 @@ class InMemoryConnection(BaseConnection):
             A list of objects. Only `bytes` values are stored.
         """
         self.store.setdefault(collection_name, {})
+        self.tags.setdefault(collection_name, {})
         for name, obj in zip(object_names, object):
-            if isinstance(obj, bytes):
-                self.store[collection_name][name] = obj
+            self.store[collection_name][name] = obj
+            if collection_name == "data-store":
+                tags = self.tags[collection_name].get(name, {})
+                tags.setdefault("training_ref", "0")
+                self.tags[collection_name][name] = tags
+
+    def get_object_tags(
+        self, collection_name: str, object_name: str
+    ) -> dict[str, str]:
+        return self.tags.get(collection_name, {}).get(object_name, {}).copy()
+
+    def put_object_tags(
+        self, collection_name: str, object_name: str, tags: dict[str, str]
+    ) -> None:
+        self.tags.setdefault(collection_name, {})
+        self.tags[collection_name][object_name] = {
+            k: str(v) for k, v in tags.items()
+        }
 
     def put_objects_with_duplicity_check(
         self,

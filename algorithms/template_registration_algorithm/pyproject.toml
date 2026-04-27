@@ -9,7 +9,7 @@ description = "Performs a registration of a sequence of images."
 supported_devices = ["cpu", "gpu"]
 default_device = "cpu"
 additional_parameters = [
-    {name = "max_translation", description = "Maximum translation as a fraction of the image size.", config = {type = "float_range", default = 0.25, min = 0.0, max = 1.0, step = 0.05, adjustable = true}}
+    {name = "max_translation", displayed_name = "Max translation", description = "Maximum translation as a fraction of the image size.", config = {type = "float_range", default = 0.25, min = 0.0, max = 1.0, step = 0.05, decimal_precision = 2, adjustable = true}}
 ]
 # Whether to check if the module is importable by performing an import
 # test.
@@ -19,15 +19,3 @@ check_importable = false
 # is not implemented yet. For now, the .py files are minimized using
 # python_minifier.
 obfuscate = true
-
-# Whether to check the hash of the module against existing modules in
-# the database server. Will check if the module already exists by comparing
-# the etag hash. If the module already exists, it will reuse it and return
-# the existing module id instead of uploading.
-hash_module = true
-
-# Whether to check the hash of the algorithm assets against existing assets in
-# the database server. Will check if the asset already exists by comparing
-# their hashes. If the asset already exists, it will reuse it and return
-# the existing asset id instead of uploading.
-hash_assets = true

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Copyright 2024 TESCAN 3DIM, s.r.o.
 All rights reserved
 """
@@ -9,9 +9,7 @@ import io
 import h5py
 import numpy as np
 from PIL import Image
-from natsort import natsorted
 import requests
-import json
 import socket
 
 
@@ -55,7 +53,8 @@ def prepare_payload(image_stack_path: str) -> io.BytesIO:
         for file in os.listdir(image_stack_path)
         if file.endswith(".png")
     ]
-    image_paths = natsorted(image_paths)
+    # sort the image paths by filename to ensure correct order in the stack
+    image_paths.sort()
     images = [np.array(Image.open(image_path)) for image_path in image_paths]
     images = np.array(images)
     print(images.shape)
@@ -66,7 +65,9 @@ def prepare_payload(image_stack_path: str) -> io.BytesIO:
     return bio
 
 
-def prepare_random_payload(num_of_slices: int, width: int, height: int) -> io.BytesIO:
+def prepare_random_payload(
+    num_of_slices: int, width: int, height: int
+) -> io.BytesIO:
     """
     Prepare payload for post request.
     Parameters
@@ -84,7 +85,9 @@ def prepare_random_payload(num_of_slices: int, width: int, height: int) -> io.By
 
     """
 
-    images = np.random.randint(0, 255, (num_of_slices, width, height), dtype=np.uint8)
+    images = np.random.randint(
+        0, 255, (num_of_slices, width, height), dtype=np.uint8
+    )
     print(images.shape)
     files = []
     for i in range(images.shape[0]):
@@ -94,6 +97,40 @@ def prepare_random_payload(num_of_slices: int, width: int, height: int) -> io.By
         bio.seek(0)
         files.append(bio)
     return files
+
+
+def prepare_sample(
+    input_files: list[str], target_files: list[str], tags: list[str] = []
+) -> list[dict[str]]:
+    """
+    Prepare sample payload with simple input-target file paring schema.
+    Parameters
+    ----------
+    input_files : list[str]
+        List of input file hashes.
+    target_files : list[str]
+        List of target file hashes.
+    tags : list[str]
+        Tags assigned to the sample.
+    Returns
+    -------
+    list[dict[str]]
+        The payload.
+    """
+    min_list_size = min(len(input_files), len(target_files))
+    files = []
+    for i in range(min_list_size):
+        files.append({"input": [input_files[i]], "target": [target_files[i]]})
+    if not tags:
+        payload = {
+            "files": files,
+        }
+    else:
+        payload = {
+            "files": files,
+            "tags": tags,
+        }
+    return [payload]
 
 
 # Helper function to perform API call
@@ -129,11 +166,15 @@ def get_algorithm_id(
 
     if headers is not None:
         if use_name and use_version:
-            response = requests.get(f"{endpoint_url}/{name}/{version}", headers=headers)
+            response = requests.get(
+                f"{endpoint_url}/{name}/{version}", headers=headers
+            )
         elif use_name:
             response = requests.get(f"{endpoint_url}/{name}", headers=headers)
         elif use_version:
-            response = requests.get(f"{endpoint_url}/{version}", headers=headers)
+            response = requests.get(
+                f"{endpoint_url}/{version}", headers=headers
+            )
         elif not use_name and not use_version:
             response = requests.get(f"{endpoint_url}/", headers=headers)
     else:
@@ -170,16 +211,18 @@ def get_all_algorithms(endpoint_url: str, headers=None) -> requests.Response:
     return response
 
 
-def post_files(
-    endpoint_url: str, payload: list[io.BytesIO], headers=None
+def post_objects(
+    endpoint_url: str,
+    payload: list[io.BytesIO] | list[str] | list[dict],
+    headers=None,
 ) -> list[requests.Response]:
     """
-    Post file.
+    Post objects.
     Parameters
     ----------
     endpoint_url : str
         The endpoint url.
-    payload : list[io.BytesIO]
+    payload : list[io.BytesIO] | list[str] | list[dict]
         The payload.
     headers : dict, optional
         The headers. The default is None.
@@ -189,25 +232,41 @@ def post_files(
         The response.
     """
     responses = []
-    for file in payload:
-        if headers is not None:
-            response = requests.post(endpoint_url, headers=headers, data=file)
-            responses.append(response)
+    for item in payload:
+        if isinstance(item, dict):
+            if headers is not None:
+                response = requests.post(
+                    endpoint_url, headers=headers, json=item
+                )
+            else:
+                response = requests.post(endpoint_url, json=item)
         else:
-            response = requests.post(endpoint_url, data=file)
-            responses.append(response)
+            if headers is not None:
+                response = requests.post(
+                    endpoint_url, headers=headers, data=item
+                )
+            else:
+                response = requests.post(endpoint_url, data=item)
+        responses.append(response)
     return responses
 
 
-def get_file(endpoint_url: str, file_id: str, headers=None) -> requests.Response:
+# function aliases
+post_files = post_objects
+post_samples = post_objects
+
+
+def get_object(
+    endpoint_url: str, object_id: str, headers=None
+) -> requests.Response:
     """
-    Get file.
+    Get object.
     Parameters
     ----------
     endpoint_url : str
         The endpoint url.
-    file_id : str
-        The file id.
+    object_id : str
+        The object id.
     headers : dict, optional
         The headers. The default is None.
     Returns
@@ -217,21 +276,28 @@ def get_file(endpoint_url: str, file_id: str, headers=None) -> requests.Response
     """
 
     if headers is not None:
-        response = requests.get(f"{endpoint_url}/{file_id}", headers=headers)
+        response = requests.get(f"{endpoint_url}/{object_id}", headers=headers)
     else:
-        response = requests.get(f"{endpoint_url}/{file_id}")
+        response = requests.get(f"{endpoint_url}/{object_id}")
     return response
 
 
-def delete_file(endpoint_url: str, file_id: str, headers=None) -> requests.Response:
+# function aliases
+get_file = get_object
+get_sample = get_object
+
+
+def delete_object(
+    endpoint_url: str, object_id: str, headers=None
+) -> requests.Response:
     """
-    Delete file.
+    Delete object.
     Parameters
     ----------
     endpoint_url : str
         The endpoint url.
-    file_id : str
-        The file id.
+    object_id : str
+        The object id.
     headers : dict, optional
         The headers. The default is None.
     Returns
@@ -240,10 +306,18 @@ def delete_file(endpoint_url: str, file_id: str, headers=None) -> requests.Respo
         The response.
     """
     if headers is not None:
-        response = requests.delete(f"{endpoint_url}/{file_id}", headers=headers)
+        response = requests.delete(
+            f"{endpoint_url}/{object_id}", headers=headers
+        )
     else:
-        response = requests.delete(f"{endpoint_url}/{file_id}")
+        response = requests.delete(f"{endpoint_url}/{object_id}")
     return response
+
+
+# function aliases
+delete_file = delete_object
+delete_sample = delete_object
+delete_trained_algorithm = delete_object
 
 
 def execute_algorithm(
@@ -282,19 +356,20 @@ def execute_algorithm(
             "input_dataset_ids": input_dataset_ids,
             "algorithm_id": algorithm_id,
         }
-    payload = json.dumps(payload)
     if headers is not None:
-        response = requests.post(endpoint_url, headers=headers, data=payload)
+        response = requests.post(endpoint_url, headers=headers, json=payload)
     else:
-        response = requests.post(endpoint_url, data=payload)
+        response = requests.post(endpoint_url, json=payload)
     return response
 
 
-def get_execution_record(
-    endpoint_url: str, execution_id: str, headers=None
+def stop_algorithm_execution(
+    endpoint_url: str,
+    execution_id: str,
+    headers=None,
 ) -> requests.Response:
     """
-    Get execution record.
+    Stop algorithm execution.
     Parameters
     ----------
     endpoint_url : str
@@ -309,12 +384,80 @@ def get_execution_record(
         The response.
     """
     if headers is not None:
-        response = requests.get(f"{endpoint_url}/{execution_id}", headers=headers)
+        response = requests.post(
+            f"{endpoint_url}/{execution_id}/stop", headers=headers
+        )
     else:
-        response = requests.get(f"{endpoint_url}/{execution_id}")
+        response = requests.post(f"{endpoint_url}/{execution_id}/stop")
     return response
+
+
+def get_process_record(
+    endpoint_url: str, process_id: str, headers=None
+) -> requests.Response:
+    """
+    Get process record.
+    Parameters
+    ----------
+    endpoint_url : str
+        The endpoint url.
+    process_id : str
+        The process id.
+    headers : dict, optional
+        The headers. The default is None.
+    Returns
+    -------
+    requests.Response
+        The response.
+    """
+    if headers is not None:
+        response = requests.get(f"{endpoint_url}/{process_id}", headers=headers)
+    else:
+        response = requests.get(f"{endpoint_url}/{process_id}")
+    return response
+
+
+# function aliases
+get_execution_record = get_process_record
+get_training_record = get_process_record
 
 
 def is_port_in_use(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(("localhost", port)) == 0
+
+
+def train_algorithm(
+    endpoint_url: str,
+    algorithm_id: str = None,
+    training_data: list[str] = None,
+    addition_parameters: dict = None,
+    headers=None,
+) -> requests.Response:
+    """
+    Train algorithm.
+    Parameters
+    ----------
+    endpoint_url : str
+        The endpoint url.
+    algorithm_id : str
+        The algorithm id.
+    training_data : list[str]
+        The input training sample ids.
+    addition_parameters: dict
+        Addition training parameters.
+    headers : dict, optional
+        The headers. The default is None.
+    Returns
+    -------
+    requests.Response
+        The response.
+    """
+    keys = ["algorithm_id", "training_data", "addition_parameters"]
+    values = [algorithm_id, training_data, addition_parameters]
+    payload = dict([(k, v) for k, v in zip(keys, values) if v is not None])
+    if headers is not None:
+        response = requests.post(endpoint_url, headers=headers, json=payload)
+    else:
+        response = requests.post(endpoint_url, json=payload)
+    return response

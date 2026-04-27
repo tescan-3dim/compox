@@ -44,11 +44,26 @@ To see the usage of the `deploy-algorithms` command, you can run:
 compox deploy-algorithms --help
 ```
 
-This command will read the algorithm definitions from the folder specified in your configuration file with the `deploy_algorithms_from` key
-and deploy them to the server. For example:
+By default, this command reads algorithm definitions from the folder specified
+in your configuration file with the `deploy_algorithms_from` key and deploys
+all deployable algorithm subfolders found there.
+
+Examples:
 
 ```bash
 compox deploy-algorithms --config /path/to/config.yaml
+```
+
+Deploy only selected algorithm folders:
+
+```bash
+compox deploy-algorithms --config /path/to/config.yaml --name foo --name bar
+```
+
+Override the algorithm root folder for a single run:
+
+```bash
+compox deploy-algorithms --config /path/to/config.yaml --path /path/to/algorithms
 ```
 
 Note that the server does not need to be running in order to deploy the algorithms.
@@ -60,6 +75,7 @@ The server uses pydantic settings for configuration. The options can be either s
 - Ensure all paths and URLs are correctly set before running the application.
 - Adjust CUDA settings based on hardware capabilities.
 - Logging paths should be accessible by the application to prevent errors.
+- Use the `logging` section to control how much detail is shown in the console versus the log file.
 - See the [configuration reference](#configuration-reference) below for detailed configuration options.
 
 <details><summary>Configuration reference</summary>
@@ -68,39 +84,93 @@ The server uses pydantic settings for configuration. The options can be either s
 
 ### Compox Configuration Reference
 
-| Section                         | Field                      | Default                            | Description                                                                 |
-|----------------------------------|-----------------------------|------------------------------------|-----------------------------------------------------------------------------|
-|                                  | `port`                    | `5461`                             | The main server port used to make requests                                 |
-|                                  | `deploy_algorithms_from`  | `"./algorithms"`                   | Directory for algorithm deployment sources.                                |
-|                                  | `log_path`                | `"LOG_DEFAULT:compox.log"`     | Path to the main log file (supports dynamic prefixes).                     |
-|                                  | `config`                  | `None`                             | Optional config path override.                                             |
-| `info`                           | `product_name`              | `"Tescan Compox Backend"`          | Product display name.                                                      |
-| `info`                           | `server_tags`               | `[]` → auto appends `"compox"` | Tags attached to the server. `"compox"` is added automatically.        |
-| `info`                           | `group_name`                | `"TESCAN GROUP, a.s."`             | Name of the corporate group.                                               |
-| `info`                           | `organization_name`         | `"TESCAN GROUP, a.s."`             | Full name of the organization.                                             |
-| `info`                           | `organization_domain`       | `"tescan.com"`                     | Domain used in server configuration.                                       |
-| `gui`                            | `algorithm_add_remove_in_menus` | `False`                        | Enables/disables GUI menu for algorithm management.                        |
-| `gui`                            | `use_systray`               | `False`                            | Enables/disables systray GUI integration.                                  |
-| `gui`                            | `icon_path`                 | Path to the installed package resource | Path to the systray icon (supports dynamic prefixes)               |
-| `inference`                       | `device`                   | `"cuda"`                           | Device used for model inference (`"cpu"`, `"cuda"`, `"mps"`).              |
-| `inference`                       | `cuda_visible_devices`     | `"0"`                              | Comma-separated list of visible CUDA GPUs.                                 |
-| `storage`                        | `collection_prefix`         | `""`                               | Prefix applied to object store collections. (useful for AWS s3 store, where unique bucket names are needed)|
-| `storage`                        | `data_store_expire_days`    | `1`                                | Number of days until stored datasets expire.                               |
-| `storage`                        | `access_key_id`             | generated with `UUIDv4`            | Generated access key for storage backend. If `null` is provided, random UUIDv4 is generated. |
-| `storage`                        | `secret_access_key`         | generated with `UUIDv4`            | Generated secret key for storage backend. If `null` is provided, random UUIDv4 is generated. |S
-| `storage.backend_settings` (minio) | `provider`                | `"minio"`                          | Selected backend provider.                                                 |
-| `storage.backend_settings` (minio) | `start_instance`         | `True`                              | Whether to start a local MinIO server.                                     |
-| `storage.backend_settings` (minio) | `port`                   | `9091`                              | MinIO service port.                                                        |
-| `storage.backend_settings` (minio) | `console_port`           | `9090`                              | MinIO admin console port.                                                  |
-| `storage.backend_settings` (minio) | `executable_path`        | `"minio/minio_bin"`                 | Path to the MinIO binary (accepts dynamic prefixes).                |
-| `storage.backend_settings` (minio) | `storage_path`           | `"minio/compox_store"`              | Storage directory used by MinIO (accepts dynamic prefixes).         |
-| `storage.backend_settings` (minio) | `aws_region`             | `None`                              | Optional AWS compatibility region.                                         |
-| `storage.backend_settings` (minio) | `s3_domain_name`         | `None`                              | Optional domain override for S3 compatibility.                             |
-| `storage.backend_settings` (minio) | `s3_endpoint_url`        | Derived from `port`                 | Computed as `http://localhost:{port}`.                                     |
-| `storage.backend_settings` (aws)   | `provider`                | `"aws"`                            | AWS backend selection.                                                     |
-| `storage.backend_settings` (aws)   | `s3_endpoint_url`        | `None`                             | Optional override for S3 endpoint URL.                                     |
-| `storage.backend_settings` (aws)   | `aws_region`             | `None`                             | AWS region (e.g. `us-east-1`).                                             |
-| `storage.backend_settings` (aws)   | `s3_domain_name`         | `None`                             | Domain used for S3-style URLs.                                             |
+| Section                           | Field                        | Default                              | Description                                                                 |
+|------------------------------------|------------------------------|--------------------------------------|-----------------------------------------------------------------------------|
+|                                    | `port`                       | `5481`                               | The main server port used to make requests.                                 |
+|                                    | `deploy_algorithms_from`     | `"./algorithms"`                     | Directory for algorithm deployment sources.                                 |
+|                                    | `log_path`                   | `"LOG_DEFAULT:compox.log"`           | Path to the main log file (supports dynamic prefixes).                      |
+|                                    | `config`                     | `None`                               | Optional config path override.                                              |
+| `logging`                          | `console_level`              | `"INFO"`                             | Minimum level shown in the interactive console. At `DEBUG`/`TRACE`, suppressed access and MinIO console logs are shown again. |
+| `logging`                          | `file_level`                 | `"INFO"`                             | Minimum level written to the main log file.                                 |
+| `info`                             | `product_name`               | `"Tescan Compox Backend"`                | Product display name.                                                       |
+| `info`                             | `server_tags`                | `[]` (auto appends `"compox"`)       | Tags attached to the server. `"compox"` is added automatically.             |
+| `info`                             | `group_name`                 | `"TESCAN GROUP, a.s."`               | Name of the corporate group.                                                |
+| `info`                             | `organization_name`          | `"TESCAN GROUP, a.s."`              | Full name of the organization.                                              |
+| `info`                             | `organization_domain`        | `"tescan.com"`                   | Domain used in server configuration.                                        |
+| `gui`                              | `algorithm_add_remove_in_menus` | `False`                           | Enables/disables GUI menu for algorithm management.                         |
+| `gui`                              | `use_systray`                | `False`                              | Enables/disables systray GUI integration.                                   |
+| `gui`                              | `icon_path`                  | Path to the installed package resource | Path to the systray icon (supports dynamic prefixes).                    |
+| `inference`                        | `device`                     | `"cuda"`                             | Device used for model inference (`"cpu"`, `"cuda"`, `"mps"`).               |
+| `inference`                        | `cuda_visible_devices`       | `"0"`                                | Comma-separated list of visible CUDA GPUs.                                  |
+| `inference.backend_settings` (fastapi) | `executor`               | `"fastapi_background_tasks"`         | Task executor selection.                                                    |
+| `inference.backend_settings` (fastapi) | `worker_number`          | `1`                                  | Number of FastAPI background task workers.                                  |
+| `inference.backend_settings` (celery) | `executor`                | `"celery"`                           | Task executor selection.                                                    |
+| `inference.backend_settings` (celery) | `worker_name`            | `"compox_worker"`                    | Celery worker name.                                                         |
+| `inference.backend_settings` (celery) | `broker_url`             | required                             | Broker URL for Celery (e.g. `amqp://`).                                     |
+| `inference.backend_settings` (celery) | `result_backend`         | `"rpc://"`                           | Celery result backend.                                                      |
+| `inference.backend_settings` (celery) | `run_flower`             | `False`                              | Whether to run Celery Flower.                                               |
+| `inference.backend_settings` (celery) | `flower_port`            | `None`                               | Optional Flower port override.                                              |
+| `storage`                          | `collection_prefix`          | `""`                                 | Prefix applied to object store collections (useful for AWS S3).             |
+| `storage`                          | `data_store_expire_days`     | `1`                                  | Days until stored datasets expire.                                          |
+| `storage`                          | `execution_store_expire_days`| `30`                                 | Days until execution data expires.                                          |
+| `storage`                          | `training_store_expire_days` | `30`                                 | Days until training data expires.                                           |
+| `storage`                          | `deploy_store_expire_days`   | `30`                                 | Days until deploy data expires.                                             |
+| `storage`                          | `stop_requests_expire_days`  | `7`                                  | Days until stop-requests expire.                                            |
+| `storage`                          | `access_key_id`              | generated with `UUIDv4`              | Generated access key for storage backend. If `null` is provided, random UUIDv4 is generated. |
+| `storage`                          | `secret_access_key`          | generated with `UUIDv4`              | Generated secret key for storage backend. If `null` is provided, random UUIDv4 is generated. |
+| `storage.backend_settings` (minio) | `provider`                   | `"minio"`                            | Selected backend provider.                                                  |
+| `storage.backend_settings` (minio) | `start_instance`             | `True`                               | Whether to start a local MinIO server.                                      |
+| `storage.backend_settings` (minio) | `port`                       | `5483`                               | MinIO service port.                                                         |
+| `storage.backend_settings` (minio) | `console_port`               | `5482`                               | MinIO admin console port.                                                   |
+| `storage.backend_settings` (minio) | `executable_path`            | `"minio/minio_bin"` or `"minio/minio.exe"` | MinIO binary path (OS-specific, supports dynamic prefixes).            |
+| `storage.backend_settings` (minio) | `storage_path`               | `"minio/compox_store"`               | Storage directory used by MinIO (supports dynamic prefixes).                |
+| `storage.backend_settings` (minio) | `aws_region`                 | `None`                               | Optional AWS compatibility region.                                          |
+| `storage.backend_settings` (minio) | `s3_domain_name`             | `None`                               | Optional domain override for S3 compatibility.                              |
+| `storage.backend_settings` (minio) | `s3_endpoint_url`            | Derived from `port`                  | Computed as `http://localhost:{port}`.                                      |
+| `storage.backend_settings` (aws)   | `provider`                   | `"aws"`                              | AWS backend selection.                                                      |
+| `storage.backend_settings` (aws)   | `s3_endpoint_url`            | `None`                               | Optional override for S3 endpoint URL.                                      |
+| `storage.backend_settings` (aws)   | `aws_region`                 | `None`                               | AWS region (e.g. `us-east-1`).                                              |
+| `storage.backend_settings` (aws)   | `s3_domain_name`             | `None`                               | Domain used for S3-style URLs.                                              |
+| `ssl`                              | `use_ssl`                    | `False`                              | Enable SSL on the server.                                                   |
+| `ssl`                              | `ssl_keyfile`                | `None`                               | SSL key file path (supports dynamic prefixes).                              |
+| `ssl`                              | `ssl_certfile`               | `None`                               | SSL certificate path (supports dynamic prefixes).                           |
+| `middleware`                       | `allow_origins`              | `[]`                                 | CORS allowed origins.                                                       |
+| `middleware`                       | `allow_methods`              | `["GET"]`                            | CORS allowed methods.                                                       |
+| `middleware`                       | `allow_headers`              | `[]`                                 | CORS allowed headers.                                                       |
+| `middleware`                       | `allow_credentials`          | `False`                              | CORS allow credentials.                                                     |
+| `middleware`                       | `expose_headers`             | `[]`                                 | CORS exposed headers.                                                       |
+| `middleware`                       | `max_age`                    | `3600`                               | CORS preflight max age in seconds.                                          |
+
+### Logging configuration
+
+Compox uses separate console and file sinks. This lets you keep the terminal readable while still collecting more detailed logs in the file.
+
+Example:
+
+```yaml
+log_path: "LOG_DEFAULT:compox.log"
+
+logging:
+  console_level: "INFO"
+  file_level: "DEBUG"
+```
+
+Recommended modes:
+
+- Quiet day-to-day operation:
+  ```yaml
+  logging:
+    console_level: "INFO"
+    file_level: "DEBUG"
+  ```
+- Full interactive debugging:
+  ```yaml
+  logging:
+    console_level: "DEBUG"
+    file_level: "DEBUG"
+  ```
+
+At `INFO` console level, Compox suppresses some high-frequency console noise such as polling status requests, file transfer access logs, and routine MinIO subprocess output. These logs still remain available in the file sink. At `DEBUG` or `TRACE`, those console logs are shown again.
 
 
 Some fields in the Compox configuration (such as `log_path`, `icon_path`, etc.) support **dynamic prefixes** that resolve to OS-specific or runtime-specific paths. This allows for portability across platforms (e.g., Windows, Linux) and between development and production environments.
@@ -117,3 +187,6 @@ Some fields in the Compox configuration (such as `log_path`, `icon_path`, etc.) 
 |                          | - On Linux/macOS, defaults to `"."` (current dir)                                       |
 
 These are resolved **at runtime** in the `Settings.parse_paths()` validator method.
+
+## Security Notice
+While you can technically communicate with a remotely running Compox instance, the communication is currently not authenticated and done via standard HTTP. Do not expose Compox endpoints to network in case of sensitive code or data. Security improvements are currently work in progress.

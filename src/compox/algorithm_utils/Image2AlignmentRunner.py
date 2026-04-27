@@ -1,14 +1,12 @@
-
 """
 Copyright 2024 TESCAN 3DIM, s.r.o.
 All rights reserved
 """
 
 import numpy as np
-from typing import Type
 
 from compox.algorithm_utils.BaseRunner import BaseRunner
-from compox.algorithm_utils.io_schemas import ImageSchema, AlignmentSchema, DataSchema
+from compox.algorithm_utils.io_schemas import ImageSchema, AlignmentSchema
 
 
 class Image2AlignmentRunner(BaseRunner):
@@ -18,10 +16,12 @@ class Image2AlignmentRunner(BaseRunner):
 
     algorithm_type = "Image2Alignment"
 
-    def fetch_data(self, 
-                   file_ids: list[dict],  
-                   *keys: str, 
-                   parallel: bool = False) -> list[dict]:
+    def fetch_data(
+        self,
+        file_ids: list[str],
+        *keys: str,
+        parallel: bool = False,
+    ) -> list[dict]:
         """
         Fetches the data from the database. The data is fetches as a list of dictionaries, where
         each dictionary represents a dataset. Specific keys can be provided to
@@ -31,10 +31,8 @@ class Image2AlignmentRunner(BaseRunner):
 
         Parameters
         ----------
-        file_ids : list[dict]
-            List of the datasets to upload. Each dataset is a defined as a dictionary.
-        pydantic_data_schema : Type[DataSchema]
-            The pydantic schema of the data. Must inherit from the DataSchema class.
+        file_ids : list[str]
+            The identifiers of the data files in the database.
         *keys : str
             Optional keys to fetch from the HDF5 file, if not provided, all keys
             will be fetched.
@@ -46,11 +44,11 @@ class Image2AlignmentRunner(BaseRunner):
         list[dict]
             List of the datasets fetched from the database as dictionaries.
         """
-        return self.task_handler.fetch_data(file_ids, ImageSchema, *keys, parallel=parallel)
+        return self.task_handler.fetch_data(
+            file_ids, ImageSchema, *keys, parallel=parallel
+        )
 
-    def post_data(self,
-        data: list[dict],
-        parallel: bool = False) -> list[str]:
+    def post_data(self, data: list[dict], parallel: bool = False) -> list[str]:
         """
         Uploads a list of datasets to the database. The dataset is a dictionary
         where the keys are the names of the datasets and the values are the
@@ -63,8 +61,6 @@ class Image2AlignmentRunner(BaseRunner):
         ----------
         data : list[dict]
             List of the datasets to upload. Each dataset is a defined as a dictionary.
-        pydantic_data_schema : Type[DataSchema]
-            The pydantic schema of the data. Must inherit from the DataSchema class.
         parallel : bool, optional
             If True, the data will be uploaded in parallel. Default is False.
 
@@ -75,7 +71,9 @@ class Image2AlignmentRunner(BaseRunner):
         """
         return self.task_handler.post_data(data, AlignmentSchema, parallel)
 
-    def preprocess(self, input_data: dict, args: dict = {}) -> np.ndarray:
+    def preprocess(
+        self, input_data: dict, args: dict | None = None
+    ) -> np.ndarray:
         """
         Default Image2Alignment preprocessing method. This method is used to fetch
         the data from the database, preprocess it and pass it to the inference
@@ -115,7 +113,9 @@ class Image2AlignmentRunner(BaseRunner):
 
         return input_images
 
-    def postprocess(self, data: list[np.ndarray], args: dict = {}) -> list[str]:
+    def postprocess(
+        self, data: list[np.ndarray], args: dict | None = None
+    ) -> list[str]:
         """
         Default Image2Alignment postprocessing method. This method expects a list of
         homography matrices as input. The matrices are used to create a list of

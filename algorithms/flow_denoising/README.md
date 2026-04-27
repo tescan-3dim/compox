@@ -183,7 +183,7 @@ As mentioned earlier, the `Runner` class should inherit from **Image2ImageRunner
 ```python
 class Runner(Image2ImageRunner):
 
-    def inference(self, input_data: np.ndarray, args: dict = {}) -> np.ndarray:
+    def inference(self, input_data: np.ndarray, args: dict | None = None) -> np.ndarray:
         pass
 ```
 
@@ -245,7 +245,7 @@ from compox.algorithm_debug import debug
 
 class Runner(Image2ImageRunner):
 
-    def inference(self, input_data: np.ndarray, args: dict = {}) -> np.ndarray:
+    def inference(self, input_data: np.ndarray, args: dict | None = None) -> np.ndarray:
 
         # Extract parameters
         sigmas = args["sigmas"]
@@ -528,7 +528,7 @@ Once your algorithm is implemented and ready, you can deploy it to **Compox** us
 Simply run this command:
 
 ```bash
-compox deploy-algorithms --config app_server.yaml
+compox deploy-algorithms --config app_server.yaml --name flow_denoising
 ```
 
 If you are running the server for the first time, the process might take a bit longer because **Compox** needs to download and initialize the **MinIO** service.

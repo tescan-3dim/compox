@@ -3,7 +3,7 @@ Copyright 2024 TESCAN 3DIM, s.r.o.
 All rights reserved
 """
 
-from fastapi import APIRouter, Request, BackgroundTasks
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from compox.pydantic_models import (
     ExecutionRecord,
@@ -14,6 +14,12 @@ from compox.pydantic_models import (
 import json
 from datetime import datetime
 from compox.server_utils import generate_uuid, find_algorithm_by_id
+from compox.tasks.StopRequest import StopRequest
+
+
+STOPPABLE_STATES = {"PENDING", "RUNNING", "STARTED"}
+TERMINAL_STATES = {"STOPPED", "FAILED", "COMPLETED"}
+
 
 router = APIRouter(prefix="/api", tags=["execution-controller"])
 
@@ -90,8 +96,11 @@ def execute_algorithm(
         algorithm_id=incoming_execution_request.algorithm_id,
         input_dataset_ids=incoming_execution_request.input_dataset_ids,
         execution_device_override=incoming_execution_request.execution_device_override,
+        resolved_execution_device=None,
         additional_parameters=incoming_execution_request.additional_parameters,
         session_token=incoming_execution_request.session_token,
+        checkpoint_id=incoming_execution_request.checkpoint_id,
+        algorithm_minor_version=incoming_execution_request.algorithm_minor_version,
         output_dataset_ids=[],
         status="PENDING",
         progress=0,
@@ -111,18 +120,14 @@ def execute_algorithm(
             content={"detail": f"Failed to save execution record: {e}"},
         )
 
-    args = incoming_execution_request.additional_parameters
     if settings.inference.backend_settings.executor == "celery":
         request.app.state.executor.send_task(
             "task",
             args=[
-                algorithm_id,
-                incoming_execution_request.input_dataset_ids,
                 json.dumps(execution_record.model_dump()),
-                args,
             ],
             task_id=execution_id,
-            retries=2
+            retries=2,
         )
     elif (
         settings.inference.backend_settings.executor
@@ -134,11 +139,8 @@ def execute_algorithm(
 
         request.app.state.executor.submit(
             execution_task_fastapi,
-            database_connection,
-            algorithm_id,
-            incoming_execution_request.input_dataset_ids,
-            execution_record,
-            args,
+            database_connection=database_connection,
+            execution_record=execution_record,
         )
     else:
         raise Exception(
@@ -148,6 +150,74 @@ def execute_algorithm(
         )
 
     return ExecutionResponse(execution_id=execution_id)
+
+
+@router.post(
+    "/v0/executions/{id}/stop",
+    summary="Stops an execution by id",
+    response_model=ResponseMessage,
+)
+async def stop_execution(id: str, request: Request) -> ResponseMessage:
+    """
+    Stops an execution by id.
+
+    Parameters
+    ----------
+    id : str
+        The id of the execution to stop.
+    request : Request
+        The request.
+
+    Returns
+    -------
+    ResponseMessage
+        The response message.
+    """
+
+    database_connection = request.app.state.database_connection
+
+    # get execution record
+    try:
+        object_exists = database_connection.check_objects_exist(
+            "execution-store", [id]
+        )[0]
+        if not object_exists:
+            return JSONResponse(
+                status_code=404,
+                content={"detail": "Execution record not found"},
+            )
+        execution_record = ExecutionRecord(
+            **json.loads(
+                database_connection.get_objects("execution-store", [id])[0]
+            )
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"Failed to get execution record: {e}"},
+        )
+
+    status = execution_record.status.upper()
+    if status not in STOPPABLE_STATES:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "detail": f"Execution in state {status} cannot be stopped"
+            },
+        )
+
+    try:
+        stop_request = StopRequest(id, database_connection)
+        stop_request.submit()
+        return JSONResponse(
+            status_code=200,
+            content={"detail": "Stop request posted successfully"},
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"Failed to post stop request: {e}"},
+        )
 
 
 @router.get(

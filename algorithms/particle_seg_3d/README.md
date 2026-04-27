@@ -212,7 +212,7 @@ A minimal skeleton looks like this:
 ```python
 class Runner(Image2SegmentationRunner):
     
-    def inference(self, input_data: np.ndarray, args: dict = {}) -> np.ndarray:
+    def inference(self, input_data: np.ndarray, args: dict | None = None) -> np.ndarray:
         pass
 ```
 
@@ -411,7 +411,7 @@ class ParticleSegNnUNet(Nnunet):
 
 class Runner(Image2SegmentationRunner):
 
-    def inference(self, input_data: np.ndarray, args: dict = {}) -> np.ndarray:
+    def inference(self, input_data: np.ndarray, args: dict | None = None) -> np.ndarray:
 
         # Prepare data and setup model
         zarr_path, output_path = self.prepare_data(input_data, args)
@@ -737,7 +737,7 @@ Once your algorithm is implemented and ready, you can deploy it to **Compox** us
 Simply run this command:
 
 ```bash
-compox deploy-algorithms --config app_server.yaml
+compox deploy-algorithms --config app_server.yaml --name particle_seg_3d
 ```
 
 If you are running the server for the first time, the process might take a bit longer because **Compox** needs to download and initialize the **MinIO** service.

@@ -6,6 +6,7 @@ All rights reserved
 from compox.database_connection.BaseConnection import BaseConnection
 import tempfile
 import os
+import json
 
 
 class TempfileConnection(BaseConnection):
@@ -177,6 +178,14 @@ class TempfileConnection(BaseConnection):
                     os.path.join(self.temp_folder.name, collection_name, name), "wb"
                 ) as f:
                     f.write(obj)
+        if collection_name == "data-store":
+            for name in object_names:
+                tags_path = os.path.join(
+                    self.temp_folder.name, collection_name, f"{name}.tags"
+                )
+                if not os.path.isfile(tags_path):
+                    with open(tags_path, "w", encoding="utf-8") as f:
+                        f.write(json.dumps({"training_ref": "0"}))
 
     def put_objects_with_duplicity_check(
         self, collection_name: str, object_names: list[str], object: list[bytes]
@@ -208,3 +217,29 @@ class TempfileConnection(BaseConnection):
                 ) as f:
                     f.write(obj)
         return object_exists
+
+    def get_object_tags(
+        self, collection_name: str, object_name: str
+    ) -> dict[str, str]:
+        """
+        Get object tags for a file. Tags are stored in a sidecar .tags JSON file.
+        """
+        tags_path = os.path.join(
+            self.temp_folder.name, collection_name, f"{object_name}.tags"
+        )
+        if not os.path.isfile(tags_path):
+            return {}
+        with open(tags_path, "r", encoding="utf-8") as f:
+            return json.loads(f.read())
+
+    def put_object_tags(
+        self, collection_name: str, object_name: str, tags: dict[str, str]
+    ) -> None:
+        """
+        Put object tags for a file. Tags are stored in a sidecar .tags JSON file.
+        """
+        tags_path = os.path.join(
+            self.temp_folder.name, collection_name, f"{object_name}.tags"
+        )
+        with open(tags_path, "w", encoding="utf-8") as f:
+            f.write(json.dumps({k: str(v) for k, v in tags.items()}))

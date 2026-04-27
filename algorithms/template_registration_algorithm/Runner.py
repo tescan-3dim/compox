@@ -24,7 +24,9 @@ class Runner(Image2AlignmentRunner):
         """
         pass
 
-    def inference(self, data: np.ndarray, args: dict = {}) -> list[np.ndarray]:
+    def inference(
+        self, data: np.ndarray, args: dict | None = None
+    ) -> list[np.ndarray]:
         """
         Run the inference.
 

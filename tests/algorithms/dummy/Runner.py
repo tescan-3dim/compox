@@ -20,7 +20,9 @@ class Runner(Image2ImageRunner):
         """
         pass
 
-    def preprocess(self, input_data: dict, args: dict = {}) -> tuple:
+    def preprocess(
+        self, input_data: dict, args: dict | None = None
+    ) -> tuple:
         """Preprocess the request data before feeding into model for inference.
 
         Parameters
@@ -42,7 +44,7 @@ class Runner(Image2ImageRunner):
         # now we will pass the images and the denoising weight to the inference method
         return input_images
 
-    def inference(self, data, args: dict = {}) -> dict:
+    def inference(self, data, args: dict | None = None) -> dict:
         """
         Run the inference.
 
@@ -58,7 +60,9 @@ class Runner(Image2ImageRunner):
         """
         return data
 
-    def postprocess(self, data: np.array, args: dict = {}) -> list[str]:
+    def postprocess(
+        self, data: np.array, args: dict | None = None
+    ) -> list[str]:
         """
         Postprocess the output data.
 

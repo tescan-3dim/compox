@@ -3,16 +3,18 @@ Copyright 2024 TESCAN 3DIM, s.r.o.
 All rights reserved
 """
 
-from logging.config import dictConfig
 import time
-import io   
-from typing import Type, Any
+import io
+from typing import Type, Any, List
 from abc import ABC, abstractmethod
+from pathlib import Path
 
 from compox.algorithm_utils.io_schemas import DataSchema
 from compox.algorithm_utils.runner_context import current_runner_context
 from compox.tasks import TaskHandler
-from compox.tasks.context_task_handler import current_task_handler
+from compox.tasks.context_handler import current_handler
+from compox.training.TrainingHandler import TrainingHandler
+from compox.training.TrainingDataset import TrainingDataset
 
 
 class BaseRunner(ABC):
@@ -70,7 +72,7 @@ class BaseRunner(ABC):
         ValueError
             If task handler is not set.
         """
-        task_handler = current_task_handler.get(None)
+        task_handler = current_handler.get(None)
         if task_handler is None:
             raise ValueError("Task handler is not set.")
         return task_handler
@@ -219,7 +221,7 @@ class BaseRunner(ABC):
         self.load_assets()
         self._locking_assets = False
 
-    def run(self, input_data: dict, args: dict = {}) -> None:
+    def run(self, input_data: dict, args: dict = None) -> None:
         """
         Run the algorithm.
 
@@ -243,6 +245,8 @@ class BaseRunner(ABC):
         """
         self.task_handler.logger.info("Starting execution.")
         start = time.time()
+        if not args:
+            args = {}
         try:
             out = self.postprocess_base(
                 self.inference_base(
@@ -258,11 +262,14 @@ class BaseRunner(ABC):
             self.task_handler.mark_as_completed(out)
             return None
 
+        except TaskHandler.TaskStoppedException as _:
+            raise
+
         except Exception as e:
             self.task_handler.mark_as_failed(e)
             raise e
 
-    def preprocess_base(self, input_data: dict, args: dict = {}) -> Any:
+    def preprocess_base(self, input_data: dict, args: dict = None) -> Any:
         """
         Preprocess the input data.
 
@@ -279,6 +286,8 @@ class BaseRunner(ABC):
         Any
             The preprocessed input data.
         """
+        if not args:
+            args = {}
         start = time.time()
         # update status of the execution to running
         self.task_handler.status = "RUNNING"
@@ -293,7 +302,7 @@ class BaseRunner(ABC):
         return out
 
     @abstractmethod
-    def preprocess(self, input_data: dict, args: dict = {}) -> Any:
+    def preprocess(self, input_data: dict, args: dict = None) -> Any:
         """
         Preprocess the input data.
 
@@ -316,7 +325,7 @@ class BaseRunner(ABC):
         """
         raise NotImplementedError
 
-    def inference_base(self, data: Any, args: dict = {}) -> Any:
+    def inference_base(self, data: Any, args: dict = None) -> Any:
         """
         Run the inference.
 
@@ -332,6 +341,8 @@ class BaseRunner(ABC):
         Any
             The output data.
         """
+        if not args:
+            args = {}
         start = time.time()
         self.task_handler.logger.info("Running inference.")
         out = self.inference(data, args)
@@ -344,7 +355,7 @@ class BaseRunner(ABC):
         return out
 
     @abstractmethod
-    def inference(self, data: Any, args: dict = {}) -> Any:
+    def inference(self, data: Any, args: dict = None) -> Any:
         """
         Run the inference.
 
@@ -366,7 +377,7 @@ class BaseRunner(ABC):
         """
         raise NotImplementedError
 
-    def postprocess_base(self, data: Any, args: dict = {}) -> list[str]:
+    def postprocess_base(self, data: Any, args: dict = None) -> list[str]:
         """
         Postprocess the output data.
 
@@ -382,6 +393,8 @@ class BaseRunner(ABC):
         list[str]
             The ids of the output datasets.
         """
+        if not args:
+            args = {}
         start = time.time()
         self.task_handler.logger.info("Postprocessing output data.")
         output_dataset_ids = self.postprocess(data, args)
@@ -395,7 +408,7 @@ class BaseRunner(ABC):
         return output_dataset_ids
 
     @abstractmethod
-    def postprocess(self, data: Any, args: dict = {}) -> list[str]:
+    def postprocess(self, data: Any, args: dict = None) -> list[str]:
         """
         Postprocess the output data.
 
@@ -419,10 +432,10 @@ class BaseRunner(ABC):
 
     def fetch_data(
         self,
-        file_ids: list[dict],
+        file_ids: list[str],
         pydantic_data_schema: Type[DataSchema],
         *keys: str,
-        parallel: bool = False
+        parallel: bool = False,
     ) -> list[dict]:
         """
         Fetches the data from the database. A pydantic schema must be provided
@@ -433,7 +446,7 @@ class BaseRunner(ABC):
 
         Parameters
         ----------
-        file_ids : list[dict]
+        file_ids : list[str]
             The identifiers of the data files in the database.
         pydantic_data_schema : Type[DataSchema]
             The pydantic schema of the data. Must inherit from the DataSchema class.
@@ -603,3 +616,357 @@ class BaseRunner(ABC):
         else:
             raise ValueError("Invalid logging level provided.")
         return None
+
+    def run_training(
+        self, training_data: list[str], args: dict = None
+    ) -> tuple[str, str, str]:
+        """
+        Train the algorithm.
+
+        Parameters
+        ----------
+        training_data : list[str]
+            The training samples ids.
+        args : dict
+            Additional arguments for training.
+        Returns
+        -------
+        tuple[str, str, str]
+            The trained algorithm id, name and major version.
+        """
+        if not isinstance(self.task_handler, TrainingHandler):
+            raise ValueError(
+                "The task handler is not a TrainingHandler. Training can only be run with a TrainingHandler."
+            )
+        if not args:
+            args = {}
+        self.task_handler.logger.info("Starting training.")
+        self.task_handler.status = "RUNNING"
+        start = time.time()
+        try:
+            self.train(training_data, args)
+            self.task_handler.logger.info(
+                "Training completed in {} seconds.".format(
+                    round(time.time() - start, 2)
+                )
+            )
+            if len(self.task_handler.output_checkpoint_ids) == 0:
+                self.task_handler.mark_as_failed(
+                    "Training failed: At least one output checkpoint must be created before marking the training as completed."
+                )
+            self.task_handler.mark_as_completed()
+            return None
+
+        except TaskHandler.TaskStoppedException:
+            raise
+
+        except Exception as e:
+            self.task_handler.mark_as_failed(e)
+            raise e
+
+    def train(self, training_data: list[str], args: dict = None) -> None:
+        """
+        Train the algorithm.
+
+        Parameters
+        ----------
+        training_data : list[str]
+            The training samples ids.
+        args : dict
+            Additional arguments for training.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        NotImplementedError
+        """
+        self.task_handler.logger.error(
+            "Training is not implemented for this algorithm. A train() method"
+            " must be implemented in the Runner subclass."
+        )
+        raise NotImplementedError
+
+    def save_checkpoint(
+        self, checkpoint: dict[str, bytes], properties: dict = {}
+    ) -> str:
+        """
+        Save a training checkpoint to the database.
+
+        Parameters
+        ----------
+        checkpoint : dict[str, bytes]
+            The dictionary containing the checkpoint files. The keys are the file names
+            which must correspond to the asset keys used to load the assets in the load_assets()
+            method. Values are the file contents as bytes e.g. Pytorch model weight converted
+            to bytes using io.BytesIO().
+
+        properties : dict, optional
+            Additional properties to associate with the checkpoint. Default is an empty dictionary.
+
+        Returns
+        -------
+        str
+            The identifier of the saved checkpoint.
+
+        Raises
+        ------
+        ValueError
+            If saving the checkpoint fails.
+        """
+        if not isinstance(self.task_handler, TrainingHandler):
+            raise ValueError(
+                "The task handler is not a TrainingHandler. Checkpoints can only be saved with a TrainingHandler."
+            )
+        try:
+            checkpoint_id = self.task_handler.save_checkpoint(
+                checkpoint, properties
+            )
+            return checkpoint_id
+
+        except TaskHandler.TaskStoppedException as _:
+            raise
+        except Exception as e:
+            self.task_handler.mark_as_failed(e)
+            raise ValueError(f"Failed to save checkpoint: {e}")
+
+    def set_state(self, state: dict) -> None:
+        """
+        Set the state of the runner. The state is a dictionary that can be used
+        to store any information that might be useful for the client, such as
+        intermediate metrics, loss values, etc.
+
+        WARNING: The state is always overwritten, not merged, so it is up to the
+        developer to either fetch the current state using get_state() or keep
+        track of the state in the algorithm code.
+
+        Parameters
+        ----------
+        state : dict
+            The state of the runner.
+
+        Returns
+        -------
+        None
+        """
+        self.task_handler.state = state
+        return None
+
+    def get_state(self) -> dict:
+        """
+        Get the current state of the runner. The state is a dictionary that can be used
+        to store any information that might be useful for the client, such as
+        intermediate metrics, loss values, etc.
+
+        Returns
+        -------
+        dict
+            The current state of the runner.
+        """
+        return self.task_handler.state
+
+    def get_training_dataset(
+        self, training_sample_ids: list[str]
+    ) -> TrainingDataset:
+        """
+        Retrieves the training dataset record from the database.
+
+        Parameters
+        ----------
+        training_sample_ids : list[str]
+            The training sample ids.
+
+        Returns
+        -------
+        TrainingDataset
+            The training dataset record.
+
+        Raises
+        ------
+        ValueError
+            If training dataset could not be fetched.
+        """
+
+        if not isinstance(self.task_handler, TrainingHandler):
+            raise ValueError(
+                "The task handler is not a TrainingHandler. Training datasets can only be fetched with a TrainingHandler."
+            )
+        dataset = self.task_handler.get_training_dataset(training_sample_ids)
+        self.task_handler.logger.info(
+            f"Fetched training dataset with {len(dataset)} samples."
+        )
+        return dataset
+
+    def save_training_files_to_temp_store(
+        self,
+        folder_path: str | Path,
+        files: List[dict],
+        pydantic_data_schema: Type[DataSchema],
+        parallel: bool = True,
+    ) -> list[Path]:
+        """
+        Saves training files represented by a list of dictionaries to a specific folder
+        in a temporary storage created specifically for training purposes. You must provide
+        a pydantic schema to validate the data before saving. This method should be used
+        when some data (mainly numpy arrays) are loaded in the memory after some preprocessing
+        and need to be saved to the temporary storage so that they can be accessed during
+        training.
+
+        Parameters
+        ----------
+        folder_path : str | Path
+            The path to the folder in the temporary storage where the files will be saved.
+        files : List[dict]
+            The list of files to save. Each file is represented as a dictionary.
+        pydantic_data_schema : Type[DataSchema]
+            The pydantic schema of the data. Must inherit from the DataSchema class.
+        parallel : bool, optional
+            If True, the files will be saved in parallel. Default is True.
+        Returns
+        -------
+        list[Path]
+            List of the paths to the saved files.
+        """
+        if not isinstance(self.task_handler, TrainingHandler):
+            raise ValueError(
+                "The task handler is not a TrainingHandler. Training files can only be saved with a TrainingHandler."
+            )
+        return self.task_handler.save_training_files_to_temp_store(
+            folder_path, files, pydantic_data_schema, parallel
+        )
+
+    def download_files_to_temp_store(
+        self,
+        folder_path: str | Path,
+        file_ids: List[str],
+        pydantic_data_schema: Type[DataSchema],
+        batch_size: int = 8,
+        *keys: str,
+    ):
+        """
+        Downloads files from the database to a specific folder in a temporary storage
+        created specifically for training purposes. This method works directly with the
+        file identifiers in the database, which means that the files do not need to be loaded
+        to the memory, but are downloaded directly to the temporary storage.
+        You must provide a pydantic schema to validate the data before saving.
+
+        Parameters
+        ----------
+        folder_path : str | Path
+            The path to the folder in the temporary storage where the files will be saved.
+        file_ids : List[str]
+            The list of file identifiers in the database.
+        pydantic_data_schema : Type[DataSchema]
+            The pydantic schema of the data. Must inherit from the DataSchema class.
+        batch_size : int, optional
+            The number of files to download in a single batch. Default is 8.
+        *keys : str
+            Optional keys to filter the files to download.
+        """
+        if not isinstance(self.task_handler, TrainingHandler):
+            raise ValueError(
+                "The task handler is not a TrainingHandler. Files can only be downloaded with a TrainingHandler."
+            )
+        return self.task_handler.download_files_to_temp_store(
+            folder_path, file_ids, pydantic_data_schema, batch_size, *keys
+        )
+
+    def download_dataset_to_temp_store(
+        self,
+        dataset: TrainingDataset,
+        pydantic_data_schemas: dict[str, Type[DataSchema]],
+    ) -> list[list[dict]]:
+        """
+        Downloads the entire training dataset to the temporary store while
+        preserving the directory structure logically represented in the
+        sample manifests.
+
+        A subdirectory named after each sample's ID will be created
+        within the specified folder path in the temporary store. Then subdirectories
+        for each sample key will be created within the sample ID directory.
+        Finally, the files associated with each sample key will be saved in
+        their respective subdirectories.
+
+        Parameters
+        ----------
+        dataset : TrainingDataset
+            The training dataset to be downloaded.
+        pydantic_data_schemas : dict[str, Type[DataSchema]]
+            A dictionary mapping sample keys to their corresponding Pydantic
+            data schema classes for validating the data.
+
+            e.g. {"input": InputDataSchema, "label": LabelDataSchema}
+        -------
+        list[list[dict]]
+            A list of lists of dictionaries with the individual samples represented
+            as dictionaries following the structure of the sample manifests, but
+            with local paths in the temporary store instead of file IDs.
+        """
+        if not isinstance(self.task_handler, TrainingHandler):
+            raise ValueError(
+                "The task handler is not a TrainingHandler. Datasets can only be downloaded with a TrainingHandler."
+            )
+        return self.task_handler.download_dataset_to_temp_store(
+            dataset, pydantic_data_schemas
+        )
+
+    def load_dataset_from_temp_store(
+        self,
+        local_samples: list[list[dict]],
+    ) -> list[list[dict]]:
+        """
+        Loads the entire training dataset from the temporary store while
+        preserving the directory structure logically represented in the
+        sample manifests.
+
+        Parameters
+        ----------
+        local_samples : list[list[dict]]
+            A list of lists of dictionaries with the individual samples represented
+            as dictionaries following the structure of the sample manifests, but
+            with local paths in the temporary store instead of file IDs.
+        -------
+        list[list[dict]]
+            A list of lists of dictionaries with the individual samples represented
+            as dictionaries following the structure of the sample manifests, but
+            with loaded data dictionaries instead of file IDs.
+        """
+        if not isinstance(self.task_handler, TrainingHandler):
+            raise ValueError(
+                "The task handler is not a TrainingHandler. Datasets can only be loaded with a TrainingHandler."
+            )
+        return self.task_handler.load_dataset_from_temp_store(local_samples)
+
+    def load_files_from_temp_store(
+        self,
+        paths: List[str | Path],
+        parallel: bool = True,
+        *keys: str,
+    ) -> List[dict]:
+        """
+        Loads files from the temporary store.
+
+        Parameters
+        ----------
+        paths : List[str | Path]
+            The list of file paths in the temporary store to be loaded.
+        parallel : bool, optional
+            Whether to load the files in parallel, by default True.
+        *keys : str
+            The keys to extract from the loaded data dictionaries. If no keys are
+            provided, the entire data dictionary will be returned.
+
+        Returns
+        -------
+        list[dict]
+            The list of loaded data dictionaries.
+        """
+        if not isinstance(self.task_handler, TrainingHandler):
+            raise ValueError(
+                "The task handler is not a TrainingHandler. Files can only be loaded with a TrainingHandler."
+            )
+        return self.task_handler.load_files_from_temp_store(
+            paths, parallel, *keys
+        )

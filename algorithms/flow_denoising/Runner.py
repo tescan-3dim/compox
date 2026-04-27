@@ -17,7 +17,9 @@ class Runner(Image2ImageRunner):
             
         return callback
 
-    def inference(self, input_data: np.ndarray, args: dict = {}) -> np.ndarray:
+    def inference(
+        self, input_data: np.ndarray, args: dict | None = None
+    ) -> np.ndarray:
 
         # Extract parameters
         sigmas = args["sigmas"]

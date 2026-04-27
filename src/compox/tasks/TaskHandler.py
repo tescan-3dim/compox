@@ -6,7 +6,6 @@ All rights reserved
 import io
 import h5py
 import json
-import traceback
 from typing import Type, Any
 import time
 from datetime import datetime
@@ -23,6 +22,11 @@ from compox.server_utils import (
 from compox.algorithm_utils.io_schemas import DataSchema
 from compox.session.TaskSession import TaskSession
 from compox.database_connection.S3Connection import S3Connection
+from compox.training.AlgorithmCheckpoint import AlgorithmCheckpoint
+from compox.tasks.StopRequest import StopRequest
+
+
+class TaskStoppedException(Exception): ...
 
 
 class TaskHandler:
@@ -46,6 +50,8 @@ class TaskHandler:
         class, by default None.
     """
 
+    _RECORD_STORAGE_NAME = "execution-store"
+
     def __init__(
         self,
         task_id: str,
@@ -53,7 +59,7 @@ class TaskHandler:
         database_update: bool = True,
         task_session: TaskSession | None = None,
     ):
-
+        self.stop_request = StopRequest(task_id, database_connection)
         self._task_id = task_id
         self._progress = 0.0
         self.database_update = database_update
@@ -79,10 +85,95 @@ class TaskHandler:
         }
 
         self.status = "STARTED"
-
         self.task_session = task_session
         if task_session is not None:
             self.session_token = task_session.session_token
+
+    def _get_task_record(self) -> dict:
+        """
+        Get the task record from the database.
+
+        Returns
+        -------
+        dict
+            The task record as a dictionary.
+
+        Raises
+        ------
+        Exception
+            If getting the task record fails.
+        """
+        self._check_for_stop_request()
+        try:
+            task_record = json.loads(
+                self.database_connection.get_objects(
+                    self._RECORD_STORAGE_NAME,
+                    [self._task_id],
+                )[0]
+            )
+            return task_record
+        except TaskStoppedException:
+            raise
+        except Exception as e:
+            self.mark_as_failed(e)
+            raise e
+
+    def _check_for_stop_request(self) -> None:
+        """
+        Check if a stop request exists for the task. If a stop request exists,
+        mark the task as stopped.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        Exception
+            If checking for stop request fails.
+        """
+        try:
+            if (
+                self.stop_request.exists()
+                and not self.stop_request.is_acknowledged()
+            ):
+                self.logger.info("Received stop request. Stopping task.")
+                self.stop_request.acknowledge()
+                self.mark_as_stopped()
+                return
+        except TaskStoppedException:
+            raise
+        except Exception as e:
+            self.mark_as_failed(e)
+            raise e
+
+    def _save_task_record(self, task_record: dict) -> None:
+        """
+        Save the task record to the database.
+
+        Parameters
+        ----------
+        task_record : dict
+            The task record as a dictionary.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        Exception
+            If saving the task record fails.
+        """
+        try:
+            self.database_connection.put_objects(
+                self._RECORD_STORAGE_NAME,
+                [self._task_id],
+                [json.dumps(task_record).encode()],
+            )
+        except Exception as e:
+            self.mark_as_failed(e)
+            raise e
 
     @property
     def task_id(self):
@@ -132,19 +223,9 @@ class TaskHandler:
         self._progress = progress
         if self.database_update:
             try:
-                execution_record = json.loads(
-                    self.database_connection.get_objects(
-                        "execution-store",
-                        [self._task_id],
-                    )[0]
-                )
-                execution_record["progress"] = progress
-
-                self.database_connection.put_objects(
-                    "execution-store",
-                    [self._task_id],
-                    [json.dumps(execution_record).encode()],
-                )
+                task_record = self._get_task_record()
+                task_record["progress"] = progress
+                self._save_task_record(task_record)
             except Exception as e:
                 self.mark_as_failed(e)
                 raise e
@@ -185,25 +266,16 @@ class TaskHandler:
             "FAILED",
             "PENDING",
             "STARTED",
+            "STOPPED",
         ]:
             raise ValueError(f"Invalid status. Got: {status}")
 
         self._status = status
         if self.database_update:
             try:
-                execution_record = json.loads(
-                    self.database_connection.get_objects(
-                        "execution-store",
-                        [self._task_id],
-                    )[0]
-                )
-                execution_record["status"] = status
-
-                self.database_connection.put_objects(
-                    "execution-store",
-                    [self._task_id],
-                    [json.dumps(execution_record).encode()],
-                )
+                task_record = self._get_task_record()
+                task_record["status"] = status
+                self._save_task_record(task_record)
             except Exception as e:
                 self.mark_as_failed(e)
                 raise e
@@ -240,19 +312,9 @@ class TaskHandler:
         self._output_dataset_ids = output_dataset_ids
         if self.database_update:
             try:
-                execution_record = json.loads(
-                    self.database_connection.get_objects(
-                        "execution-store",
-                        [self._task_id],
-                    )[0]
-                )
-                execution_record["output_dataset_ids"] = output_dataset_ids
-
-                self.database_connection.put_objects(
-                    "execution-store",
-                    [self._task_id],
-                    [json.dumps(execution_record).encode()],
-                )
+                task_record = self._get_task_record()
+                task_record["output_dataset_ids"] = output_dataset_ids
+                self._save_task_record(task_record)
             except Exception as e:
                 self.mark_as_failed(e)
                 raise e
@@ -289,19 +351,9 @@ class TaskHandler:
         self._time_completed = time_completed
         if self.database_update:
             try:
-                execution_record = json.loads(
-                    self.database_connection.get_objects(
-                        "execution-store",
-                        [self._task_id],
-                    )[0]
-                )
-                execution_record["time_completed"] = time_completed
-
-                self.database_connection.put_objects(
-                    "execution-store",
-                    [self._task_id],
-                    [json.dumps(execution_record).encode()],
-                )
+                task_record = self._get_task_record()
+                task_record["time_completed"] = time_completed
+                self._save_task_record(task_record)
             except Exception as e:
                 self.mark_as_failed(e)
                 raise e
@@ -338,24 +390,14 @@ class TaskHandler:
         self._session_token = session_token
         if self.database_update:
             try:
-                execution_record = json.loads(
-                    self.database_connection.get_objects(
-                        "execution-store",
-                        [self._task_id],
-                    )[0]
-                )
-                execution_record["session_token"] = session_token
-
-                self.database_connection.put_objects(
-                    "execution-store",
-                    [self._task_id],
-                    [json.dumps(execution_record).encode()],
-                )
+                task_record = self._get_task_record()
+                task_record["session_token"] = session_token
+                self._save_task_record(task_record)
             except Exception as e:
                 self.mark_as_failed(e)
                 raise e
 
-    def set_as_current_task_handler(self) -> None:
+    def set_as_current_handler(self) -> None:
         """
         Set this task handler as the current task handler in the
         current_task_handler context variable. This is used to access the
@@ -365,9 +407,9 @@ class TaskHandler:
         -------
         None
         """
-        from compox.tasks.context_task_handler import current_task_handler
+        from compox.tasks.context_handler import current_handler
 
-        current_task_handler.set(self)
+        current_handler.set(self)
 
     def mark_as_completed(self, output_dataset_ids: list[str]) -> None:
         """
@@ -425,16 +467,60 @@ class TaskHandler:
         -------
         None
         """
-        if e is not None:
-            self.logger.error(e)
-            self.logger.error(traceback.format_exc())
-        self.progress = 1.0
-        self.time_completed = str(datetime.now())
-        self.output_dataset_ids = []
-        self._log_file_stats()
-        self.update_log()
-        self.status = "FAILED"
-        logger.remove(self.logger_sink_id)
+
+        if isinstance(e, TaskStoppedException):
+            return
+
+        try:
+            if e is not None:
+                self.logger.opt(exception=e).error("Task failed")
+            self.time_completed = str(datetime.now())
+            self.status = "FAILED"
+            self.progress = 1.0
+            self.output_dataset_ids = []
+
+            # Log useful file stats and flush logs
+            self._log_file_stats()
+            self.update_log()
+
+        except TaskStoppedException:
+            raise
+
+        finally:
+            try:
+                logger.remove(self.logger_sink_id)
+            except Exception:
+                pass
+
+    def mark_as_stopped(self) -> None:
+        """
+        Mark the task as stopped and update its record in the database. This
+        will set the status to "STOPPED" and the time completed to the current
+        time.
+
+        Returns
+        -------
+        None
+        """
+
+        try:
+            self.time_completed = str(datetime.now())
+            self._log_file_stats()
+            self.update_log()
+
+        except Exception as e:
+            self.mark_as_failed(e)
+        finally:
+            try:
+                logger.remove(self.logger_sink_id)
+            except Exception:
+                pass
+            try:
+                self.stop_request.delete()
+            except Exception:
+                pass
+            self.status = "STOPPED"
+        raise TaskStoppedException("Task has been stopped.")
 
     def update_log(self) -> None:
         """
@@ -453,25 +539,19 @@ class TaskHandler:
         self.log = str(self.stream.getvalue())
         if self.database_update:
             try:
-                execution_record = json.loads(
-                    self.database_connection.get_objects(
-                        "execution-store",
-                        [self._task_id],
-                    )[0]
-                )
-                execution_record["log"] = self.log
-
-                self.database_connection.put_objects(
-                    "execution-store",
-                    [self._task_id],
-                    [json.dumps(execution_record).encode()],
-                )
+                task_record = self._get_task_record()
+                task_record["log"] = self.log
+                self._save_task_record(task_record)
             except Exception as e:
                 self.mark_as_failed(e)
                 raise e
 
     def fetch_algorithm(
-        self, algorithm_id: str, execution_device_override: str | None = None
+        self,
+        algorithm_id: str,
+        execution_device_override: str | None = None,
+        checkpoint_id: str | None = None,
+        algorithm_minor_version: str | None = None,
     ) -> object:
         """
         Fetches the algorithm from the database and imports its corresponding
@@ -483,9 +563,19 @@ class TaskHandler:
             The id of the algorithm.
 
         execution_device_override : str | None, optional
-            The computing device override, by default None. If provided, the
-            device will be set to the computing device override (if the device
-            is supported and available).
+            The requested abstract execution device class, by default None.
+            This uses the algorithm metadata vocabulary (for example ``cpu``,
+            ``gpu`` or ``mps``). Compox resolves this request to a concrete
+            runtime device string passed into the runner, such as ``cpu``,
+            ``cuda`` or ``mps``.
+
+        checkpoint_id : str | None, optional
+            The id of the checkpoint, by default None. If provided, the
+            checkpoint will be used to load the model assets.
+
+        algorithm_minor_version : str | None, optional
+            The minor version of the algorithm, by default None. If provided, the
+            minor version will be used to load the model assets.
 
         Returns
         -------
@@ -506,11 +596,34 @@ class TaskHandler:
             )
             self.logger.info("Loading the algorithm.")
             start = time.time()
-            runner, algorithm_assets, algorithm_json = (
+            found_algorithm_key, _, _, _, _ = find_algorithm_by_id(
+                algorithm_id,
+                self.database_connection.list_objects("algorithm-store"),
+            )
+            if found_algorithm_key is None:
+                raise ValueError(f"Algorithm with id {algorithm_id} not found.")
+
+            # Always resolve latest algorithm metadata before entering cache.
+            algorithm_json = json.loads(
+                self.database_connection.get_objects(
+                    "algorithm-store",
+                    [found_algorithm_key],
+                )[0]
+            )
+            algorithm_minor_version = (
+                algorithm_json["latest_algorithm_minor_version"]
+                if algorithm_minor_version is None
+                else algorithm_minor_version
+            )
+            runner, algorithm_assets, resolved_execution_device = (
                 self.__cached_fetch_algorithm(
-                    algorithm_id, execution_device_override
+                    algorithm_json,
+                    execution_device_override,
+                    checkpoint_id,
+                    algorithm_minor_version,
                 )
             )
+            self._set_resolved_execution_device(resolved_execution_device)
             # call the runners initialize method to reset the state of the runner
             runner.initialize()
             self.algorithm_assets = algorithm_assets
@@ -521,7 +634,7 @@ class TaskHandler:
                 )
             )
             self.logger = logger.bind(
-                algorithm=f"{algorithm_json['algorithm_name']} {algorithm_json['algorithm_major_version']}.{algorithm_json['algorithm_minor_version']}",
+                algorithm=f"{algorithm_json['algorithm_name']} {algorithm_json['algorithm_major_version']}.{algorithm_minor_version}",
                 log_type="TASK",
                 task_id=self.task_id,
             )
@@ -532,8 +645,12 @@ class TaskHandler:
 
     @algorithm_cache(maxsize=1)
     def __cached_fetch_algorithm(
-        self, algorithm_id: str, execution_device_override: str | None = None
-    ) -> tuple[object, dict, dict]:
+        self,
+        algorithm_json: dict,
+        execution_device_override: str | None = None,
+        checkpoint_id: str | None = None,
+        algorithm_minor_version: str | None = None,
+    ) -> tuple[object, dict, str]:
         """
         Fetches the algorithm from the database and imports its corresponding
         Python module and runner class. This method is cached to avoid
@@ -542,13 +659,24 @@ class TaskHandler:
 
         Parameters
         ----------
-        algorithm_id : str
-            The id of the algorithm.
+        algorithm_json : dict
+            The algorithm json file as a dictionary. The algorithm json file
+            contains the metadata of the algorithm (e.g. algorithm type, tags).
 
         execution_device_override : str | None, optional
-            The computing device override, by default None. If provided, the
-            device will be set to the computing device override (if the device
-            is supported and available).
+            The requested abstract execution device class, by default None.
+            This uses the algorithm metadata vocabulary (for example ``cpu``,
+            ``gpu`` or ``mps``). Compox resolves this request to a concrete
+            runtime device string passed into the runner, such as ``cpu``,
+            ``cuda`` or ``mps``.
+
+        checkpoint_id : str | None, optional
+            The id of the checkpoint, by default None. If provided, the
+            checkpoint will be used to load the model assets.
+
+        algorithm_minor_version : str | None, optional
+            The minor version of the algorithm, by default None. If provided, the
+            minor version will be used to load the model assets.
 
         Returns
         -------
@@ -556,9 +684,8 @@ class TaskHandler:
             The algorithm Runner object.
         dict
             The assets of the algorithm, such as model weights, configuration files, etc.
-        dict
-            The algorithm json file as a dictionary. The algorithm json file
-            contains the metadata of the algorithm (e.g. algorithm type, tags).
+        str
+            The concrete runtime device resolved for the runner.
 
         Raises
         ------
@@ -566,32 +693,42 @@ class TaskHandler:
             If fetch algorithm failed.
         """
 
-        # get the algorithm json file from algorithm-store bucket
-
-        try:
-            found_algorithm_key, _, _, _, _ = find_algorithm_by_id(
-                algorithm_id,
-                self.database_connection.list_objects("algorithm-store"),
-            )
-            if found_algorithm_key is None:
-                raise ValueError(f"Algorithm with id {algorithm_id} not found.")
-
-            # get algorithm object
-            algorithm_json = json.loads(
-                self.database_connection.get_objects(
-                    "algorithm-store",
-                    [found_algorithm_key],
-                )[0]
-            )
-
-        except Exception as e:
-            self.mark_as_failed(e)
-            raise ValueError(f"Failed to fetch algorithm: {e}")
-
         # get the algorithm module from the module-store bucket
+        if not algorithm_minor_version:
+            algorithm_minor_version = algorithm_json[
+                "latest_algorithm_minor_version"
+            ]
 
-        module_id = algorithm_json["module_id"]
-        algorithm_assets = algorithm_json["assets"]
+        # load the checkpoint if provided
+        if checkpoint_id is not None:
+            try:
+                algorithm_checkpoint = AlgorithmCheckpoint(
+                    checkpoint_id=checkpoint_id,
+                    database_connection=self.database_connection,
+                )
+            except Exception as e:
+                self.mark_as_failed(e)
+                raise ValueError(f"Failed to load checkpoint: {e}")
+            # override the algorithm assets with the ones from the checkpoint
+            for (
+                key,
+                value,
+            ) in algorithm_checkpoint.checkpoint_manifest.assets.items():
+                try:
+                    algorithm_json["algorithm_minor_version"][
+                        algorithm_minor_version
+                    ]["assets"][key] = value
+                except KeyError as ke:
+                    self.logger.error(
+                        f"Asset {key} from checkpoint not found in algorithm assets. Make sure the checkpoint is compatible with the algorithm."
+                    )
+                    self.mark_as_failed(ke)
+        module_id = algorithm_json["algorithm_minor_version"][
+            algorithm_minor_version
+        ]["module_id"]
+        algorithm_assets = algorithm_json["algorithm_minor_version"][
+            algorithm_minor_version
+        ]["assets"]
         self.algorithm_assets = algorithm_assets
         device = self.__get_device(algorithm_json, execution_device_override)
 
@@ -602,22 +739,42 @@ class TaskHandler:
                     [module_id],
                 )[0]
             )
-            with ZipImporter(module_archive_bytes.getvalue(), "Runner") as m:
+            with ZipImporter(module_archive_bytes.getvalue(), module_id) as m:
                 runner = m.Runner.__new__(m.Runner)
                 runner.initialize(device=device)
                 runner._load_assets()
         except Exception as e:
             self.mark_as_failed(e)
             raise ValueError(f"Failed to fetch algorithm: {e}")
-        return runner, algorithm_assets, algorithm_json
+        return runner, algorithm_assets, device
+
+    def _set_resolved_execution_device(
+        self, resolved_execution_device: str | None
+    ) -> None:
+        """
+        Persist the concrete runtime device resolved for this execution.
+
+        Parameters
+        ----------
+        resolved_execution_device : str | None
+            The resolved runtime device string that is actually passed into the
+            runner, for example ``cpu``, ``cuda`` or ``mps``.
+        """
+        task_record = self._get_task_record()
+        task_record["resolved_execution_device"] = (
+            resolved_execution_device
+        )
+        self._save_task_record(task_record)
 
     def __get_device(
         self, algorithm_json: dict, execution_device_override: str | None = None
     ) -> str:
         """
-        Get the device to run the model and inference on. The device is set based
-        on the default device specified in the algorithms pyproject.toml file
-        and the availability of CUDA.
+        Resolve the concrete runtime device to run the model and inference on.
+        The algorithm metadata and per-run request use abstract values such as
+        ``cpu``, ``gpu`` and ``mps``. This resolver maps those values to the
+        concrete runtime string passed into the runner, such as ``cpu``,
+        ``cuda`` or ``mps``.
 
         Parameters
         ----------
@@ -626,14 +783,14 @@ class TaskHandler:
             contains the metadata of the algorithm (e.g. algorithm type, tags).
 
         execution_device_override : str | None, optional
-            The computing device override, by default None. If provided, the
-            device will be set to the computing device override (if the device
-            is supported and available).
+            The requested abstract execution device class, by default None.
+            If provided, Compox tries to honor that request and falls back only
+            when the requested class is unsupported or unavailable.
 
         Returns
         -------
         device : str
-            The device to run the model and inference on.
+            The concrete runtime device string used to initialize the runner.
 
         Raises
         ------
@@ -653,7 +810,8 @@ class TaskHandler:
         if not execution_device_override:
             if algorithm_json["default_device"].lower() == "cpu":
                 self.logger.info(
-                    "Algorithm is set to run on CPU. Running on CPU."
+                    "No execution device override requested. "
+                    "Default device class 'cpu' resolved to runtime device 'cpu'."
                 )
                 device = "cpu"
             elif (
@@ -661,7 +819,8 @@ class TaskHandler:
                 and gpu_available
             ):
                 self.logger.info(
-                    "Algorithm is set to run on GPU. Running on GPU."
+                    "No execution device override requested. "
+                    "Default device class 'gpu' resolved to runtime device 'cuda'."
                 )
                 device = "cuda"
             elif (
@@ -669,7 +828,9 @@ class TaskHandler:
                 and not gpu_available
             ):
                 self.logger.warning(
-                    "Algorithm is set to run on GPU but CUDA is not available. Running on CPU."
+                    "No execution device override requested. "
+                    "Default device class 'gpu' could not be resolved because CUDA is not available. "
+                    "Falling back to runtime device 'cpu'."
                 )
                 device = "cpu"
             elif (
@@ -678,7 +839,9 @@ class TaskHandler:
                 and (gpu_available)
             ):
                 self.logger.info(
-                    "No default device specified. CUDA is available and GPU is supported. Running on GPU."
+                    "No execution device override requested. "
+                    "No default device class specified, GPU is supported and CUDA is available. "
+                    "Resolved runtime device 'cuda'."
                 )
                 device = "cuda"
             elif (
@@ -687,19 +850,24 @@ class TaskHandler:
                 and (not gpu_available)
             ):
                 self.logger.warning(
-                    "No default device specified. GPU is supported but CUDA is not available. Running on CPU."
+                    "No execution device override requested. "
+                    "No default device class specified, GPU is supported but CUDA is not available. "
+                    "Falling back to runtime device 'cpu'."
                 )
                 device = "cpu"
             elif algorithm_json["default_device"].lower() == "mps":
                 mps_available = check_mps_availability()
                 if not mps_available:
                     self.logger.warning(
-                        "Algorithm is set to run on MPS, but MPS is not available. Running on CPU."
+                        "No execution device override requested. "
+                        "Default device class 'mps' could not be resolved because MPS is not available. "
+                        "Falling back to runtime device 'cpu'."
                     )
                     device = "cpu"
                 else:
                     self.logger.info(
-                        "Algorithm is set to run on MPS. Running on MPS."
+                        "No execution device override requested. "
+                        "Default device class 'mps' resolved to runtime device 'mps'."
                     )
                     device = "mps"
             else:
@@ -713,7 +881,8 @@ class TaskHandler:
                 and execution_device_override.lower() == "cpu"
             ):
                 self.logger.info(
-                    f"Computing device override set to {execution_device_override}. Running on CPU."
+                    f"Execution device override requested '{execution_device_override}'. "
+                    "Resolved runtime device 'cpu'."
                 )
                 device = "cpu"
             elif (
@@ -723,7 +892,8 @@ class TaskHandler:
                 and gpu_available
             ):
                 self.logger.info(
-                    f"Computing device override set to {execution_device_override}. Running on GPU."
+                    f"Execution device override requested '{execution_device_override}'. "
+                    "Resolved runtime device 'cuda'."
                 )
                 device = "cuda"
             elif (
@@ -733,12 +903,14 @@ class TaskHandler:
                 and not gpu_available
             ):
                 self.logger.warning(
-                    f"Computing device override set to {execution_device_override}, however CUDA is not available. Running on CPU."
+                    f"Execution device override requested '{execution_device_override}', "
+                    "but CUDA is not available. Falling back to runtime device 'cpu'."
                 )
                 device = "cpu"
             else:
                 self.logger.warning(
-                    f"Computing device override {execution_device_override} is not supported, falling back to the default device: {algorithm_json['default_device']}."
+                    f"Execution device override '{execution_device_override}' is not supported. "
+                    f"Falling back to the algorithm default device class '{algorithm_json['default_device']}'."
                 )
                 device = self.__get_device(algorithm_json)
 
@@ -790,7 +962,7 @@ class TaskHandler:
 
     def fetch_data(
         self,
-        file_ids: list[dict],
+        file_ids: list[str],
         pydantic_data_schema: Type[DataSchema],
         *keys: str,
         parallel: bool = False,
@@ -803,7 +975,7 @@ class TaskHandler:
 
         Parameters
         ----------
-        file_ids : list[dict]
+        file_ids : list[str]
             The identifiers of the data files in the database.
         pydantic_data_schema : Type[DataSchema]
             The pydantic schema of the data. Must inherit from the DataSchema class.

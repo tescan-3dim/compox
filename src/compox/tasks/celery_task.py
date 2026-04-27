@@ -10,6 +10,7 @@ from loguru import logger
 from typing import Any
 
 from compox.tasks.TaskHandler import TaskHandler
+from compox.tasks.TaskHandler import TaskStoppedException
 from compox.internal.CUDAMemoryManager import CUDAMemoryManager
 from compox.session.TaskSession import TaskSession
 from compox.pydantic_models import ExecutionRecord
@@ -24,10 +25,7 @@ from compox.pydantic_models import ExecutionRecord
 )
 def execution_task_celery(
     self: Task,
-    algorithm_id: str,
-    input_dataset_ids: list[str],
     message: str,
-    args: dict = {},
 ) -> Any:
     """
     Celery task for the execution of an algorithm. This task is executed by a
@@ -37,14 +35,8 @@ def execution_task_celery(
     ----------
     self : Task
         The celery task object.
-    algorithm_id : str
-        The algorithm id.
-    input_dataset_ids : list[str]
-        The input dataset id.
     message : str
         The message.
-    args : dict
-        The arguments of the algorithm.
 
     Returns
     -------
@@ -63,24 +55,28 @@ def execution_task_celery(
             database_update=True,
             task_session=task_session,
         )
-        task_handler.set_as_current_task_handler()
+        task_handler.set_as_current_handler()
         start = datetime.now()
         runner = task_handler.fetch_algorithm(
-            algorithm_id,
+            execution_record.algorithm_id,
             execution_device_override=execution_record.execution_device_override,
+            checkpoint_id=execution_record.checkpoint_id,
+            algorithm_minor_version=execution_record.algorithm_minor_version,
         )
         task_handler.logger.info(
             "Algorithm fetched in {} seconds.".format(
                 (datetime.now() - start).total_seconds()
             )
         )
-
-        runner.run(
-            {
-                "input_dataset_ids": input_dataset_ids,
-            },
-            args=args,
-        )
+        try:
+            runner.run(
+                {
+                    "input_dataset_ids": execution_record.input_dataset_ids,
+                },
+                args=execution_record.additional_parameters,
+            )
+        except TaskStoppedException:
+            logger.info("Execution was interrupted by stop request.")
 
     # get current execution record from database
     execution_record = json.loads(

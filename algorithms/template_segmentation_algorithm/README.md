@@ -46,15 +46,17 @@ The `description` field should contain a brief description of the algorithm.
 description = "Performs a binary segmentation of a 3-D image using a skimage filter."
 ```
 
-Here we will add a `thresholding_algorithm` parameter that will allow the user to select the thresholding algorithm to use. The `type` field is set to `string_enum` to specify that the parameter is a string with a predefined set of values. The `default` field is set to `otsu` to specify the default value of the parameter. The `options` field is set to a list of strings that specify the possible values of the parameter. The `adjustable` field is set to `true` to specify that the user should be able to select the thresholding algorithm to apply.
+Here we will add a `thresholding_algorithm` parameter that will allow the user to select the thresholding algorithm to use. The optional `displayed_name` field provides a human-friendly UI label. The `type` field is set to `string_enum` to specify that the parameter is a string with a predefined set of values. The `default` field is set to `otsu` to specify the default value of the parameter. The `options` field is set to a list of strings that specify the possible values of the parameter. The `adjustable` field is set to `true` to specify that the user should be able to select the thresholding algorithm to apply.
 
 ```toml
 additional_parameters = [
-    {name = "thresholding_algorithm", description = "The thresholding algorithm to use.", config = {type = "string_enum", default = "otsu", options = ["otsu", "yen", "li", "minimum", "mean", "triangle", "isodata", "local"], adjustable = true}},
+    {name = "thresholding_algorithm", displayed_name = "Thresholding algorithm", description = "The thresholding algorithm to use.", config = {type = "string_enum", default = "otsu", options = ["otsu", "yen", "li", "minimum", "mean", "triangle", "isodata", "local"], adjustable = true}},
 ]
 ```
 
 To see more information about the possible parameter types see the [How to create an algorithm module](../README.md/#additional-parameters) section. 
+
+If you later add float-based parameters to this template, you can also provide `decimal_precision` inside `config` to control how many decimal places the UI should display.
 
 ## The algorithm dependencies
 
@@ -147,7 +149,7 @@ shape as the input images. The `inference` method can also receive a dictionary 
 You can also report the progress of the algorithm by calling the `set_progress` method. The `set_progress` method takes a float value between 0 and 1, where 0 is the start of the algorithm and 1 is the end of the algorithm. The `log_message` method can be used to log messages to compox log.
 
 ```python
-def inference(self, data: np.ndarray, args: dict = {}) -> np.ndarray:
+def inference(self, data: np.ndarray, args: dict | None = None) -> np.ndarray:
     """
     Run the inference.
 
@@ -184,4 +186,12 @@ To customize the behavior of fetching and processing the input data, and postpro
 
 ## Deploying the algorithm
 
-To deploy the finished algorithm, you can use the `pdm run deployment template_segmentation_algorithm` command. This command will deploy the algorithm to the compox. The algorithm can also be added through compox systray interface by clicking the "Add Algorithm" button and selecting the algorithm directory.
+To deploy the finished algorithm, use:
+
+```bash
+compox deploy-algorithms --config app_server.yaml --name template_segmentation_algorithm
+```
+
+This deploys the algorithm to Compox. The algorithm can also be added through
+the Compox systray interface by clicking `Add Algorithm` and selecting the
+algorithm directory.
