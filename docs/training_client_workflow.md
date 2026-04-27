@@ -1,10 +1,10 @@
-## Training workflow (client-side)
+## Training workflow
 
 This doc covers the client-facing flow for training in Compox: upload data, create training samples, start training, and retrieve results. All endpoints and payloads are derived from the current server code under `compox/src/compox/routers`.
 
 ---
 
-### 1) Upload data files
+### Upload data files
 
 Endpoint:
 - `POST /api/v0/files`
@@ -33,7 +33,7 @@ Notes:
 
 ---
 
-### 2) Create training samples
+### Create training samples
 
 Endpoint:
 - `POST /api/v0/sample`
@@ -71,7 +71,7 @@ Notes:
 
 ---
 
-### 3) Start training
+### Start training
 
 Endpoint:
 - `POST /api/v0/train-algorithm`
@@ -124,7 +124,7 @@ Progress/status details (from `TrainingHandler` and `TaskHandler`):
 
 ---
 
-### 4) Check training status
+### Check training status
 
 Endpoint:
 - `GET /api/v0/training/{training_id}`
@@ -156,7 +156,7 @@ Notes:
 
 ---
 
-### 5) Stop training (optional)
+### Stop training (optional)
 
 Endpoint:
 - `POST /api/v0/training/{training_id}/stop`
@@ -167,7 +167,7 @@ Behavior:
 
 ---
 
-### 6) Retrieve training results (checkpoints)
+### Retrieve training results (checkpoints)
 
 Endpoint:
 - `GET /api/v0/checkpoint/{checkpoint_id}`
@@ -213,7 +213,7 @@ Filtering by tags:
 
 ---
 
-### 7) Export trained algorithm (optional)
+### Export trained algorithm (optional)
 
 Endpoint:
 - `GET /api/v0/algorithm/{algorithm_name}/{algorithm_major_version}/export`
@@ -243,7 +243,7 @@ What the zip file is:
 
 ---
 
-## End-to-end summary
+### End-to-end summary
 
 1. Upload HDF5 files → get `file_id`s
 2. Create training sample(s) referencing file IDs → get `sample_id`s

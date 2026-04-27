@@ -278,7 +278,7 @@ def get_server_settings(config_path: str | None = None, verbose: bool = True) ->
     if config_path is not None:
         with open(config_path, "r") as file:
             conf = yaml.safe_load(file)
-            settings = Settings(**conf)
+            settings = Settings(**(conf or {}))
     else:
         settings = Settings()
     if verbose:

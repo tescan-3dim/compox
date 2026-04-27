@@ -73,7 +73,7 @@ def _load_settings_with_cli_overrides(
     override_values = parse_flat_args(cli_overrides)
     merged_values = dict(config_values)
     _merge_nested_dicts(merged_values, override_values)
-    return Settings(**merged_values)
+    return Settings(_cli_parse_args=False, **merged_values)
 
 
 @app.command(name="deploy-local")
@@ -653,12 +653,10 @@ def generate_config(
         typer.echo(
             "Updating server settings with additional arguments passed to the command."
         )
-    typer.echo(sys.argv)
-
     # convert the flat args to a nested dict
     additional_args = parse_flat_args(ctx.args)
 
-    server_settings = Settings(**additional_args)
+    server_settings = Settings(_cli_parse_args=False, **additional_args)
     with open(path, "w") as f:
         yaml.dump(
             server_settings.model_dump(

@@ -1,10 +1,10 @@
-## Execution workflow (client-side)
+## Execution workflow
 
 This doc covers the client-facing flow for execution in Compox: upload data, start an execution, poll status, and retrieve results. All endpoints and payloads are derived from the current server code under `compox/src/compox/routers`.
 
 ---
 
-### 1) Upload data files
+### Upload data files
 
 Endpoint:
 - `POST /api/v0/files`
@@ -33,7 +33,7 @@ Notes:
 
 ---
 
-### 2) Execute an algorithm
+### Execute an algorithm
 
 Endpoint:
 - `POST /api/v0/execute-algorithm`
@@ -85,7 +85,7 @@ Progress/status details (from `TaskHandler`):
 
 ---
 
-### 3) Sessions (optional)
+### Sessions (optional)
 
 The execution API supports an optional `session_token` that can be used to share an in‑memory cache across multiple executions.
 
@@ -101,7 +101,7 @@ Practical guidance:
 
 ---
 
-### 4) Check execution status
+### Check execution status
 
 Endpoint:
 - `GET /api/v0/executions/{execution_id}`
@@ -134,7 +134,7 @@ Notes:
 
 ---
 
-### 5) Stop execution (optional)
+### Stop execution (optional)
 
 Endpoint:
 - `POST /api/v0/executions/{execution_id}/stop`
@@ -145,7 +145,7 @@ Behavior:
 
 ---
 
-### 6) Retrieve output datasets
+### Retrieve output datasets
 
 Endpoint:
 - `GET /api/v0/files/{file_id}`
@@ -155,7 +155,7 @@ Behavior:
 
 ---
 
-### 7) Delete files (optional)
+### Delete files (optional)
 
 Endpoint:
 - `DELETE /api/v0/files/{file_id}`
@@ -169,7 +169,7 @@ Notes:
 
 ---
 
-## End-to-end summary
+### End-to-end summary
 
 1. Upload HDF5 files -> get `file_id`s
 2. Execute algorithm with `algorithm_id` + `input_dataset_ids` -> get `execution_id`

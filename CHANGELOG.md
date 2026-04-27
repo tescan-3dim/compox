@@ -1,3 +1,7 @@
+# v3.0.1 (27-04-2026)
+## Fixed
+- Fixed the documentation formatting and structure.
+
 # v3.0.0 (27-04-2026)
 ## Added
 - Algorithm training workflow: samples, training jobs, checkpoints, training state/progress/logging, and stop support.
