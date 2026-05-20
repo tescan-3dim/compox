@@ -7,6 +7,7 @@ import toml
 import pytest
 import json
 import os
+import py_compile
 from unittest.mock import call
 import hashlib
 import shutil
@@ -384,9 +385,7 @@ additional_parameters = [
 
     deployer = AlgorithmDeployer(str(d))
 
-    assert (
-        deployer.additional_parameters[0]["config"]["decimal_precision"] == 3
-    )
+    assert deployer.additional_parameters[0]["config"]["decimal_precision"] == 3
 
 
 # Test 11 - decimal precision should be rejected for non-float parameters
@@ -474,9 +473,10 @@ def test_find_other_than_py_files(tmp_path):
     d.mkdir()
     (d / "a.txt").write_text("1")
     (d / "b.py").write_text("2")
+    (d / "c.pyc").write_bytes(b"3")
     sub = d / "__pycache__"
     sub.mkdir()
-    (sub / "c.txt").write_text("3")
+    (sub / "d.txt").write_text("4")
 
     files = AlgorithmDeployer.find_other_than_py_files(str(d))
     assert any(
@@ -486,8 +486,55 @@ def test_find_other_than_py_files(tmp_path):
         not f.endswith(".py") for f in files
     ), f"Did not expect 'b.py' in output files, got {files!r}"
     assert all(
+        not f.endswith(".pyc") for f in files
+    ), f"Did not expect 'c.pyc' in output files, got {files!r}"
+    assert all(
         "__pycache__" not in f for f in files
     ), f"Did not expect files in '__pycache__' directory, got {files!r}"
+
+
+def test_create_algorithm_module_from_compiled_artifact(tmp_path):
+    """
+    Verify that bytecode-only algorithm directories are accepted as module input.
+    """
+    directory = tmp_path / "compiled_alg"
+    directory.mkdir()
+    content = {
+        "project": {"name": "compiled_algo", "version": "1.2"},
+        "tool": {
+            "compox": {
+                "check_importable": False,
+                "obfuscate": False,
+                "algorithm_type": "Generic",
+                "tags": ["compiled"],
+                "description": "compiled algorithm",
+                "supported_devices": ["cpu"],
+                "default_device": "cpu",
+                "additional_parameters": [],
+            }
+        },
+    }
+    (directory / "pyproject.toml").write_text(toml.dumps(content))
+    runner_py = directory / "Runner.py"
+    runner_py.write_text("class Runner: pass\n")
+    py_compile.compile(
+        str(runner_py),
+        cfile=str(directory / "Runner.pyc"),
+        dfile="Runner.py",
+        doraise=True,
+        invalidation_mode=py_compile.PycInvalidationMode.CHECKED_HASH,
+    )
+    runner_py.unlink()
+
+    deployer = AlgorithmDeployer(str(directory))
+    module_id, module_bytes = deployer._create_algorithm_module(
+        str(directory), pyc_only=True
+    )
+
+    assert module_id, "Expected non-empty module id for compiled artifact."
+    assert (
+        module_bytes
+    ), "Expected non-empty module bytes for compiled artifact."
 
 
 def test_find_other_than_py_files_ignores_git_metadata(tmp_path):
@@ -580,14 +627,14 @@ def test_check_if_zip_is_importable(tmp_path):
 
 
 # Test 18 - minimalize py file
-def test_minimalize_py_files(valid_alg_dir, tmp_path):
+def test_minimize_py_files(valid_alg_dir, tmp_path):
     """
-    Verify that `_minimalize_py_files` delete comments and blank lines from Python files.
+    Verify that `_minimize_py_files` delete comments and blank lines from Python files.
     """
     f = tmp_path / "m.py"
     f.write_text("# comment\n\nx = 1\n")
     deployer = AlgorithmDeployer(valid_alg_dir)
-    deployer._minimalize_py_files([str(f)])
+    deployer._minimize_py_files([str(f)])
     content = f.read_text()
     assert (
         "x=1" in content or "x = 1" in content

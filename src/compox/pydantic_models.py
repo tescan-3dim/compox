@@ -67,6 +67,12 @@ class AlgorithmRegisteredResponse(BaseModel):
         The major version of the algorithm.
     algorithm_minor_versions : list[str]
         The minor versions of the algorithm.
+    latest_algorithm_minor_version : str
+        The latest minor version of the algorithm.
+    algorithm_minor_version : str
+        DEPRECATED backward-compatibility field. It carries the same value as
+        ``latest_algorithm_minor_version`` and is kept only for legacy clients
+        that still expect ``algorithm_minor_version`` in the response.
     algorithm_input_queue : str
         The input queue of the algorithm.
     algorithm_type : str
@@ -96,6 +102,7 @@ class AlgorithmRegisteredResponse(BaseModel):
     algorithm_version: str
     algorithm_minor_versions: list[str]
     latest_algorithm_minor_version: str
+    algorithm_minor_version: str
     algorithm_type: str
     algorithm_tags: list[str]
     algorithm_description: str

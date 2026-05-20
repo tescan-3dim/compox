@@ -107,6 +107,9 @@ def get_algorithm(
                     latest_algorithm_minor_version=found_algorithm[
                         "latest_algorithm_minor_version"
                     ],
+                    algorithm_minor_version=found_algorithm[
+                        "latest_algorithm_minor_version"
+                    ],
                     algorithm_name=found_algorithm["algorithm_name"],
                     algorithm_version=found_algorithm[
                         "algorithm_major_version"
@@ -259,6 +262,9 @@ async def list_model_files(
                             algorithm_json["algorithm_minor_version"].keys()
                         ),
                         latest_algorithm_minor_version=algorithm_json[
+                            "latest_algorithm_minor_version"
+                        ],
+                        algorithm_minor_version=algorithm_json[
                             "latest_algorithm_minor_version"
                         ],
                         algorithm_name=algorithm_json["algorithm_name"],

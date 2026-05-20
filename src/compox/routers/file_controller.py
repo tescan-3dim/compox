@@ -171,9 +171,9 @@ async def delete_file(id: str, request: Request) -> ResponseMessage:
     request : Request
         The request.
 
-    Returns
-    -------
-    ResponseMessage
+        Returns
+        -------
+        ResponseMessage
     """
 
     database_connection = request.app.state.database_connection

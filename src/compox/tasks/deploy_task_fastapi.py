@@ -12,6 +12,7 @@ from loguru import logger
 
 from compox.algorithm_utils.AlgorithmDeployer import AlgorithmDeployer
 from compox.database_connection.BaseConnection import BaseConnection
+from compox.internal.EmergencyRecordStore import EmergencyRecordStore
 
 
 DEPLOY_COLLECTION = "deploy-store"
@@ -170,6 +171,7 @@ def deploy_task_fastapi(
     database_connection: BaseConnection,
     deploy_id: str,
     path: str,
+    emergency_record_store: EmergencyRecordStore | None = None,
     algorithm_name_override: Optional[str] = None,
     algorithm_major_version_override: Optional[str] = None,
     removable_override: Optional[bool] = None,
@@ -208,13 +210,14 @@ def deploy_task_fastapi(
     Exception
         Any exception during deployment is re-raised after recording failure.
     """
-    _update_deploy_record(
-        database_connection,
-        deploy_id,
-        {"status": "RUNNING", "time_started": str(datetime.now())},
-    )
-
     try:
+        emergency_record_store = emergency_record_store or EmergencyRecordStore()
+        _update_deploy_record(
+            database_connection,
+            deploy_id,
+            {"status": "RUNNING", "time_started": str(datetime.now())},
+        )
+
         if not os.path.exists(path):
             raise FileNotFoundError(f"Path not found: {path}")
 
@@ -299,13 +302,24 @@ def deploy_task_fastapi(
             },
         )
     except Exception as e:
-        _update_deploy_record(
-            database_connection,
+        failed_record = {
+            "deploy_id": deploy_id,
+            "status": "FAILED",
+            "path": path,
+            "time_completed": str(datetime.now()),
+            "log": str(e),
+        }
+        try:
+            record = json.loads(
+                database_connection.get_objects(DEPLOY_COLLECTION, [deploy_id])[0]
+            )
+            failed_record = {**record, **failed_record}
+        except Exception:
+            pass
+        emergency_record_store.write_record(
+            DEPLOY_COLLECTION,
             deploy_id,
-            {
-                "status": "FAILED",
-                "time_completed": str(datetime.now()),
-                "log": str(e),
-            },
+            failed_record,
+            storage_error=e,
         )
         raise

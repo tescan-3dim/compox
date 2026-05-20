@@ -35,7 +35,13 @@ Next, activate the project virtual environment:
 .\.venv\Scripts\Activate.ps1
 ```
 
-Once the environment is ready, install **Compox** using:
+Because `ParticleSeg3D` is not compatible with NumPy 2.x, we must constrain NumPy to a 1.x version. This ensures that all dependencies installed later will remain compatible.:
+
+```bash
+uv add numpy<2
+```
+
+Then we can install **Compox** using:
 
 ```bash
 uv add compox

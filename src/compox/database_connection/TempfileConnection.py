@@ -4,6 +4,7 @@ All rights reserved
 """
 
 from compox.database_connection.BaseConnection import BaseConnection
+from compox.database_connection.exceptions import reraised_storage_error
 import tempfile
 import os
 import json
@@ -172,20 +173,26 @@ class TempfileConnection(BaseConnection):
         object : list[bytes]  | list[str]
             The file bytes.
         """
-        for name, obj in zip(object_names, object):
-            if isinstance(obj, bytes):
-                with open(
-                    os.path.join(self.temp_folder.name, collection_name, name), "wb"
-                ) as f:
-                    f.write(obj)
-        if collection_name == "data-store":
-            for name in object_names:
-                tags_path = os.path.join(
-                    self.temp_folder.name, collection_name, f"{name}.tags"
-                )
-                if not os.path.isfile(tags_path):
-                    with open(tags_path, "w", encoding="utf-8") as f:
-                        f.write(json.dumps({"training_ref": "0"}))
+        try:
+            for name, obj in zip(object_names, object):
+                if isinstance(obj, bytes):
+                    with open(
+                        os.path.join(self.temp_folder.name, collection_name, name), "wb"
+                    ) as f:
+                        f.write(obj)
+            if collection_name == "data-store":
+                for name in object_names:
+                    tags_path = os.path.join(
+                        self.temp_folder.name, collection_name, f"{name}.tags"
+                    )
+                    if not os.path.isfile(tags_path):
+                        with open(tags_path, "w", encoding="utf-8") as f:
+                            f.write(json.dumps({"training_ref": "0"}))
+        except Exception as exc:
+            raise reraised_storage_error(
+                exc,
+                operation=f"put_objects to {collection_name}",
+            ) from exc
 
     def put_objects_with_duplicity_check(
         self, collection_name: str, object_names: list[str], object: list[bytes]
@@ -207,16 +214,22 @@ class TempfileConnection(BaseConnection):
         list[bool]
             The list of booleans indicating if the files were put.
         """
-        object_exists = self.check_objects_exist(collection_name, object_names)
-        for i, (name, obj, exists) in enumerate(
-            zip(object_names, object, object_exists)
-        ):
-            if not exists:
-                with open(
-                    os.path.join(self.temp_folder.name, collection_name, name), "wb"
-                ) as f:
-                    f.write(obj)
-        return object_exists
+        try:
+            object_exists = self.check_objects_exist(collection_name, object_names)
+            for i, (name, obj, exists) in enumerate(
+                zip(object_names, object, object_exists)
+            ):
+                if not exists:
+                    with open(
+                        os.path.join(self.temp_folder.name, collection_name, name), "wb"
+                    ) as f:
+                        f.write(obj)
+            return object_exists
+        except Exception as exc:
+            raise reraised_storage_error(
+                exc,
+                operation=f"put_objects_with_duplicity_check to {collection_name}",
+            ) from exc
 
     def get_object_tags(
         self, collection_name: str, object_name: str

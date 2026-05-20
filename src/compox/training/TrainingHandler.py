@@ -18,6 +18,7 @@ from compox.training.TrainingSample import TrainingSample
 from compox.training.TempStore import TempStore
 from compox.training.AlgorithmCheckpoint import AlgorithmCheckpoint
 from compox.algorithm_utils.io_schemas import DataSchema
+from compox.internal.EmergencyRecordStore import EmergencyRecordStore
 
 
 class TrainingHandler(TaskHandler):
@@ -49,9 +50,14 @@ class TrainingHandler(TaskHandler):
         database_update: bool = True,
         task_session: TaskSession | None = None,
         temp_store: TempStore | None = None,
+        emergency_record_store: EmergencyRecordStore | None = None,
     ):
         super().__init__(
-            training_id, database_connection, database_update, task_session
+            training_id,
+            database_connection,
+            database_update,
+            task_session,
+            emergency_record_store=emergency_record_store,
         )
         self.temp_store = temp_store
         self.output_checkpoint_ids = []

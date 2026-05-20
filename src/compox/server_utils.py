@@ -8,9 +8,6 @@ import hashlib
 import functools
 import weakref
 import os
-import tempfile
-import zipimport
-import sys
 import subprocess
 import importlib.util
 import re
@@ -20,7 +17,6 @@ from collections import deque
 from functools import partial
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
-
 from compox.database_connection import BaseConnection
 
 if TYPE_CHECKING:
@@ -334,33 +330,6 @@ def data_cache(maxsize=None):
         return inner_wrapper
 
     return wrapper
-
-
-class ZipImporter:
-    def __init__(self, zip_bytes: bytes, module_name: str):
-        self.temp_dir = tempfile.gettempdir()
-        self.temp_file = os.path.join(self.temp_dir, str(uuid.uuid4()))
-        sys.path.insert(0, self.temp_file)
-        with open(self.temp_file, "wb") as f:
-            f.write(zip_bytes)
-        importer = zipimport.zipimporter(self.temp_file)
-        spec = importlib.util.spec_from_loader(f"{module_name}", importer)
-        if spec is not None:
-            module = importlib.util.module_from_spec(spec)
-            importer.exec_module(module)
-            self.module = module
-
-    def __enter__(self):
-        return self.module
-
-    def __exit__(self, exc_type, exc_value, exc_traceback):
-        # BUG: for some reason, the tempfile sometimes cannot be removed on windows
-        # due to [PermissionError: [WinError 32] The process cannot access the file because it is being used by another process]
-        try:
-            os.remove(self.temp_file)
-        except PermissionError as _:
-            pass
-        sys.path.remove(self.temp_file)
 
 
 def check_and_create_database_collections(

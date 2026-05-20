@@ -20,6 +20,7 @@ from compox.database_connection.S3Connection import S3Connection
 def training_task_fastapi(
     database_connection: S3Connection,
     training_record: type[TrainingRecord],
+    emergency_record_store=None,
 ) -> Any:
     """
     Fastapi background task for the execution of an algorithm. This task is
@@ -45,6 +46,7 @@ def training_task_fastapi(
             database_connection=database_connection,
             database_update=True,
             temp_store=temp_store,
+            emergency_record_store=emergency_record_store,
         )
         training_handler.set_as_current_handler()
         training_handler.logger.info("Fetching algorithm...")

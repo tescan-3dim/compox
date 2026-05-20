@@ -9,13 +9,13 @@ from datetime import datetime
 import os
 import shutil
 import glob
-import copy
 import tempfile
 import zipfile
 import sys
 import hashlib
 import pathlib
 import subprocess
+import py_compile
 import python_minifier
 import toml
 import warnings
@@ -23,6 +23,9 @@ from loguru import logger
 
 from compox.algorithm_utils.AlgorithmConfigSchema import (
     AlgorithmConfigSchema,
+)
+from compox.algorithm_utils.AlgorithmRecordRegistrar import (
+    AlgorithmRecordRegistrar,
 )
 from compox.algorithm_utils.import_relativizer import (
     relativize_intra_package_imports,
@@ -64,6 +67,7 @@ class AlgorithmDeployer:
     ):
 
         self.logger = logger.bind(log_type="DEPLOYER")
+        self._record_registrar = AlgorithmRecordRegistrar()
         self.algorithm_directory = algorithm_directory
 
         pyproject_toml = self.parse_pyproject_toml(algorithm_directory)
@@ -132,6 +136,11 @@ class AlgorithmDeployer:
             pyproject_toml.get("tool", {})
             .get("compox", {})
             .get("obfuscate", True)
+        )
+        self.pyc_only = (
+            pyproject_toml.get("tool", {})
+            .get("compox", {})
+            .get("pyc_only", True)
         )
         tool_compox = pyproject_toml.get("tool", {}).get("compox", {})
         if "hash_module" in tool_compox or "hash_assets" in tool_compox:
@@ -309,22 +318,23 @@ class AlgorithmDeployer:
             self.algorithm_major_version = algorithm_major_version_override
         # check if the algorithm already exists in the database
         if database_connection is not None:
-            existing_algorithm_record = (
-                self._self_find_existing_algorithm_by_name_and_version(
-                    database_connection,
-                    self.algorithm_name,
-                    self.algorithm_major_version,
-                )
+            existing_algorithm_record = self._record_registrar.find_existing_algorithm_by_name_and_major(
+                database_connection,
+                self.algorithm_name,
+                self.algorithm_major_version,
             )
             if existing_algorithm_record is not None:
                 self.logger.info(
                     f"""Algorithm {self.algorithm_name} with major version {self.algorithm_major_version} 
-                    already exists in the database with id {existing_algorithm_record['algorithm_id']}. Modifying the existing algorithm."""
+                    already exists in the database with id {existing_algorithm_record[1]['algorithm_id']}. Modifying the existing algorithm."""
                 )
-                algorithm_id = existing_algorithm_record["algorithm_id"]
+                algorithm_id = existing_algorithm_record[1]["algorithm_id"]
 
             else:
                 algorithm_id = self.generate_uuid()
+        else:
+            existing_algorithm_record = None
+            algorithm_id = self.generate_uuid()
 
         # store the algorithm module
         try:
@@ -335,6 +345,7 @@ class AlgorithmDeployer:
                 self.algorithm_directory,
                 check_importable=self.check_importable,
                 obfuscate=self.obfuscate,
+                pyc_only=self.pyc_only,
             )
             self.logger.info(
                 f"Created algorithm module with id: {algorithm_module_id}"
@@ -399,60 +410,52 @@ class AlgorithmDeployer:
         # compose the algorithm json
 
         if existing_algorithm_record is None:
-            algorithm_json = {
-                "algorithm_id": algorithm_id,
-                "algorithm_name": self.algorithm_name,
-                "algorithm_major_version": self.algorithm_major_version,
-                "latest_algorithm_minor_version": self.algorithm_minor_version,
-                "algorithm_minor_version": {
-                    self.algorithm_minor_version: {
-                        "timestamp": timestamp,
-                        "module_id": algorithm_module_id,
-                        "assets": algorithm_assets_dict,
-                    }
-                },
-                "algorithm_type": self.algorithm_type,
-                "algorithm_tags": self.tags,
-                "algorithm_description": self.description,
-                "supported_devices": self.device,
-                "default_device": self.default_device,
-                "additional_parameters": self.additional_parameters,
-                "training_parameters": self.training_parameters,
-                "removable": self.removable,
-                "exportable": self.exportable,
-                "timestamp": timestamp,
-            }
+            algorithm_json = (
+                self._record_registrar.compose_new_algorithm_record(
+                    algorithm_id=algorithm_id,
+                    algorithm_name=self.algorithm_name,
+                    algorithm_major_version=self.algorithm_major_version,
+                    algorithm_minor_version=self.algorithm_minor_version,
+                    module_id=algorithm_module_id,
+                    assets_dict=algorithm_assets_dict,
+                    metadata={
+                        "algorithm_type": self.algorithm_type,
+                        "algorithm_tags": self.tags,
+                        "algorithm_description": self.description,
+                        "supported_devices": self.device,
+                        "default_device": self.default_device,
+                        "additional_parameters": self.additional_parameters,
+                        "training_parameters": self.training_parameters,
+                        "removable": self.removable,
+                        "exportable": self.exportable,
+                    },
+                    timestamp=timestamp,
+                )
+            )
             record_modified = True
         else:
             algorithm_json, record_modified = (
                 self._insert_new_minor_version_to_existing_algorithm(
-                    existing_algorithm_record,
+                    existing_algorithm_record[1],
                     algorithm_module_id,
                     algorithm_assets_dict,
                 )
             )
             algorithm_json["exportable"] = self.exportable
 
-        algorithm_json = json.dumps(algorithm_json, indent=4)
-
         # store the algorithm json in the algorithm-store collection
         # check if the collection exists and create it if it does not
 
         if database_connection is not None and record_modified:
-            if (
-                algorithm_collection_name
-                not in database_connection.list_collections()
-            ):
-                database_connection.create_collections(
-                    [algorithm_collection_name]
-                )
-            algorithm_key = f"{algorithm_id}~{self.algorithm_name}~{self.algorithm_major_version}"
-            database_connection.put_objects(
-                algorithm_collection_name,
-                [algorithm_key],
-                [algorithm_json],
+            self._record_registrar.upsert_algorithm_record(
+                database_connection=database_connection,
+                algorithm_record=algorithm_json,
+                algorithm_collection_name=algorithm_collection_name,
+                existing_algorithm=existing_algorithm_record,
             )
-        self.logger.info(f"Stored algorithm json: {algorithm_json}")
+        self.logger.info(
+            f"Stored algorithm json: {json.dumps(algorithm_json, indent=4)}"
+        )
         return algorithm_id
 
     def _insert_new_minor_version_to_existing_algorithm(
@@ -462,8 +465,7 @@ class AlgorithmDeployer:
         assets_dict: dict,
     ) -> tuple[dict, bool]:
         """
-        Insert a new minor version to an existing algorithm record. Checks if either
-        the module id or assets dictionary are different from the latest minor version.
+        Insert a new minor version using the shared algorithm record registrar.
 
         Parameters
         ----------
@@ -479,101 +481,25 @@ class AlgorithmDeployer:
             The modified algorithm record and a boolean indicating if a new minor
             version was inserted.
         """
-        modified_algorithm_json = copy.deepcopy(existing_algorithm_record)
-
-        # Ensure structure exists
-        modified_algorithm_json.setdefault("algorithm_minor_version", {})
-        if "latest_algorithm_minor_version" not in modified_algorithm_json:
-            # fresh doc: start at -1 so the first insert becomes 0
-            modified_algorithm_json["latest_algorithm_minor_version"] = -1
-            latest_minor_version_record = {}
-        else:
-            latest_minor_version_record = modified_algorithm_json[
-                "algorithm_minor_version"
-            ][str(modified_algorithm_json["latest_algorithm_minor_version"])]
-
-        # get the latest minor version
-        latest_minor_version = modified_algorithm_json[
-            "latest_algorithm_minor_version"
-        ]
-
-        if (
-            latest_minor_version_record.get("module_id", None) == module_id
-            and latest_minor_version_record.get("assets", None) == assets_dict
-        ):
-            # no changes, do not insert new minor version
+        modified_algorithm_json, record_modified = (
+            self._record_registrar.insert_new_minor_version(
+                existing_algorithm_record=existing_algorithm_record,
+                module_id=module_id,
+                assets_dict=assets_dict,
+            )
+        )
+        if not record_modified:
             self.logger.info(
                 "The module id and assets dictionary are the same as the latest minor version. Not inserting a new minor version."
             )
-            return modified_algorithm_json, False
-        else:
-            # insert new minor version if either module id or assets dict differ from latest
-            new_minor_version = str(int(latest_minor_version) + 1)
-            modified_algorithm_json["latest_algorithm_minor_version"] = (
-                new_minor_version
-            )
-            modified_algorithm_json["algorithm_minor_version"][
-                new_minor_version
-            ] = {
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "module_id": module_id,
-                "assets": assets_dict,
-            }
-            return modified_algorithm_json, True
-
-    def _self_find_existing_algorithm_by_name_and_version(
-        self,
-        database_connection: BaseConnection.BaseConnection,
-        algorithm_name: str,
-        algorithm_major_version: str,
-    ) -> dict | None:
-        """
-        Find an existing algorithm by name and major version.
-
-        Parameters
-        ----------
-        database_connection : BaseConnection.BaseConnection
-            The database connection object.
-
-        algorithm_name : str
-            The name of the algorithm.
-
-        algorithm_major_version : str
-            The major version of the algorithm.
-
-        Returns
-        -------
-        dict | None
-            The existing algorithm record if found, None otherwise.
-
-        """
-
-        if "algorithm-store" not in database_connection.list_collections():
-            return None
-
-        algorithm_keys = database_connection.list_objects("algorithm-store")
-        for algorithm in algorithm_keys:
-            key = algorithm["Key"]
-            parts = key.split("~")
-            if len(parts) >= 2:
-                name = parts[1]
-                major_version = parts[2]
-                if (
-                    name == algorithm_name
-                    and major_version == algorithm_major_version
-                ):
-                    return json.loads(
-                        database_connection.get_objects(
-                            "algorithm-store", [key]
-                        )[0]
-                    )
-        return None
+        return modified_algorithm_json, record_modified
 
     def _create_algorithm_module(
         self,
         path_to_algorithm_directory: str,
         check_importable: bool = False,
         obfuscate: bool = False,
+        pyc_only: bool = False,
     ) -> tuple[str, bytes]:
         """
         Detects all .py files in the algorithm directory, zips them as a python
@@ -608,17 +534,25 @@ class AlgorithmDeployer:
             if Runner.py not found or import failed
         """
 
-        # get all the .py files in the algorithm directory
+        # Source algorithms are transformed from .py files. Exported/runtime
+        # artifacts may instead provide a bytecode-only package with Runner.pyc.
         py_files, _ = self.find_py_files(path_to_algorithm_directory)
+        pyc_files, _ = self.find_pyc_files(path_to_algorithm_directory)
         py_files_with_relative_path = [
             os.path.relpath(py_file, path_to_algorithm_directory)
             for py_file in py_files
         ]
+        pyc_files_with_relative_path = [
+            os.path.relpath(pyc_file, path_to_algorithm_directory)
+            for pyc_file in pyc_files
+        ]
 
-        # check if Runner.py is in the root of the algorithm directory
-        if "Runner.py" not in py_files_with_relative_path:
+        has_runner_py = "Runner.py" in py_files_with_relative_path
+        has_runner_pyc = "Runner.pyc" in pyc_files_with_relative_path
+
+        if not has_runner_py and not has_runner_pyc:
             raise ValueError(
-                "Runner.py not found in the root of the algorithm directory."
+                "Runner.py / Runner.pyc not found in the root of the algorithm directory."
             )
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -633,61 +567,90 @@ class AlgorithmDeployer:
             with open(init_file_path, "w", encoding="utf-8") as f:
                 f.write("# Init file for the module\n")
 
-            # copy the .py files to the temporary directory while preserving the directory structure
-            for py_file, py_file_with_relative_path in zip(
-                py_files, py_files_with_relative_path
-            ):
-                os.makedirs(
-                    os.path.join(
-                        module_path,
-                        os.path.dirname(py_file_with_relative_path),
-                    ),
-                    exist_ok=True,
-                )
-                shutil.copy(
-                    py_file,
-                    os.path.join(module_path, py_file_with_relative_path),
-                )
+            if has_runner_py:
+                # copy the .py files to the temporary directory while preserving the directory structure
+                for py_file, py_file_with_relative_path in zip(
+                    py_files, py_files_with_relative_path
+                ):
+                    os.makedirs(
+                        os.path.join(
+                            module_path,
+                            os.path.dirname(py_file_with_relative_path),
+                        ),
+                        exist_ok=True,
+                    )
+                    shutil.copy(
+                        py_file,
+                        os.path.join(module_path, py_file_with_relative_path),
+                    )
 
-            relativize_intra_package_imports(module_path)
+                relativize_intra_package_imports(module_path)
 
-            module_py_files, _ = self.find_py_files(module_path)
+                module_py_files, _ = self.find_py_files(module_path)
 
-            # check if __init__.py exists in the module_path
-            if not os.path.exists(os.path.join(module_path, "__init__.py")):
-                # create an empty __init__.py file
+                # check if __init__.py exists in the module_path
+                if not os.path.exists(os.path.join(module_path, "__init__.py")):
+                    # create an empty __init__.py file
+                    with open(
+                        os.path.join(module_path, "__init__.py"),
+                        "w",
+                        encoding="utf-8",
+                    ) as f:
+                        f.write("# Init file for the package\n")
+
+                # load the content of the __init__.py file and append a runner import statement
+                with open(
+                    os.path.join(module_path, "__init__.py"),
+                    "r",
+                    encoding="utf-8",
+                ) as f:
+                    init_content = f.read()
+                init_content += "\nfrom .Runner import Runner\n"
                 with open(
                     os.path.join(module_path, "__init__.py"),
                     "w",
                     encoding="utf-8",
                 ) as f:
-                    f.write("# Init file for the package\n")
+                    f.write(init_content)
 
-            # load the content of the __init__.py file and append a runner import statement
-            with open(
-                os.path.join(module_path, "__init__.py"),
-                "r",
-                encoding="utf-8",
-            ) as f:
-                init_content = f.read()
-            init_content += "\nfrom .Runner import Runner\n"
-            with open(
-                os.path.join(module_path, "__init__.py"),
-                "w",
-                encoding="utf-8",
-            ) as f:
-                f.write(init_content)
+                if obfuscate:
+                    # obfuscate the .py files
+                    # TODO: implement obfuscation
+                    # for now, minimize the .py files
+                    self._minimize_py_files(module_py_files)
 
-            if obfuscate:
-                # obfuscate the .py files
-                # TODO: implement obfuscation
-                # for now, minimize the .py files
-                self._minimalize_py_files(module_py_files)
+                # Optionally compile to bytecode-only package.
+                # Keep legacy .pyc file layout next to module paths for predictable
+                # loading from extracted archives.
+                if pyc_only:
+                    module_pyc_files = self._compile_and_strip_py_files(
+                        module_py_files, module_root=module_path
+                    )
+                    files_for_hash = module_pyc_files
+                else:
+                    files_for_hash = module_py_files
+            else:
+                # Compiled artifact input: preserve .pyc package layout as-is.
+                for pyc_file, pyc_rel_path in zip(
+                    pyc_files, pyc_files_with_relative_path
+                ):
+                    os.makedirs(
+                        os.path.join(
+                            module_path,
+                            os.path.dirname(pyc_rel_path),
+                        ),
+                        exist_ok=True,
+                    )
+                    shutil.copy(
+                        pyc_file,
+                        os.path.join(module_path, pyc_rel_path),
+                    )
+                files_for_hash = self.find_pyc_files(module_path)[0]
 
             # Compute module id from transformed sources to ensure packaging options
             # (e.g., obfuscation) affect deduplication.
             module_id = self.get_py_files_hashes(
-                module_py_files, base_directory=module_path
+                files_for_hash, base_directory=module_path
             )
 
             final_module_path = os.path.join(root_module_dir, module_id)
@@ -709,6 +672,45 @@ class AlgorithmDeployer:
                 module_bytes = f.read()
 
         return module_id, module_bytes
+
+    @staticmethod
+    def _compile_and_strip_py_files(
+        py_files: list[str], module_root: str
+    ) -> list[str]:
+        """
+        Compile Python sources to adjacent ``.pyc`` files and remove sources.
+
+        Parameters
+        ----------
+        py_files : list[str]
+            Absolute paths to source ``.py`` files.
+        module_root : str
+            Root module directory used to preserve relative layout.
+
+        Returns
+        -------
+        list[str]
+            Absolute paths to generated ``.pyc`` files.
+        """
+        pyc_files: list[str] = []
+        for py_file in py_files:
+            rel = os.path.relpath(py_file, module_root)
+            rel_no_ext = os.path.splitext(rel)[0]
+            pyc_path = os.path.join(module_root, rel_no_ext + ".pyc")
+            os.makedirs(os.path.dirname(pyc_path), exist_ok=True)
+            py_compile.compile(
+                py_file,
+                cfile=pyc_path,
+                dfile=pathlib.Path(rel).as_posix(),
+                doraise=True,
+                invalidation_mode=py_compile.PycInvalidationMode.CHECKED_HASH,
+            )
+            pyc_files.append(pyc_path)
+
+        for py_file in py_files:
+            os.remove(py_file)
+
+        return pyc_files
 
     def _store_algorithm_assets(
         self,
@@ -811,15 +813,15 @@ class AlgorithmDeployer:
         """
         return path.lstrip("/\\").replace("\\", "/")
 
-    def _minimalize_py_files(self, py_files: list[str]) -> None:
+    def _minimize_py_files(self, py_files: list[str]) -> None:
         """
-        Minimalize .py files using python_minifier. The minification is performed
+        Minimize .py files using python_minifier. The minification is performed
         in place.
 
         Parameters
         ----------
         py_files : list[str]
-            The list of paths to the .py files to minimalize.
+            The list of paths to the .py files to minimize.
 
         Returns
         -------
@@ -940,9 +942,7 @@ class AlgorithmDeployer:
 
         ignored_dirs = {".git"}
         if ignore_pycache:
-            ignored_dirs |= AlgorithmDeployer._IGNORED_METADATA_DIRS - {
-                ".git"
-            }
+            ignored_dirs |= AlgorithmDeployer._IGNORED_METADATA_DIRS - {".git"}
 
         for root, dirs, _ in os.walk(directory):
             dirs[:] = [d for d in dirs if d not in ignored_dirs]
@@ -952,6 +952,42 @@ class AlgorithmDeployer:
             py_files, base_directory=directory
         )
         return py_files, files_hash
+
+    @staticmethod
+    def find_pyc_files(
+        directory: str, ignore_pycache: bool = True
+    ) -> tuple[list[str], str]:
+        """
+        Find all the .pyc files in a directory recursively.
+
+        Parameters
+        ----------
+        directory : str
+            The directory to search.
+        ignore_pycache: bool
+            Whether to ignore __pycache__ directory.
+
+        Returns
+        -------
+        tuple[list[str], str]
+            A tuple containing a list of .pyc files and their combined hash.
+        """
+        pyc_files = []
+
+        for root, _, _ in os.walk(directory):
+            pyc_files.extend(glob.glob(os.path.join(root, "*.pyc")))
+
+        if ignore_pycache:
+            pyc_files = [
+                file
+                for file in pyc_files
+                if "__pycache__" not in file.split(os.path.sep)
+            ]
+
+        files_hash = AlgorithmDeployer.get_py_files_hashes(
+            pyc_files, base_directory=directory
+        )
+        return pyc_files, files_hash
 
     @staticmethod
     def get_py_files_hashes(
@@ -1021,18 +1057,18 @@ class AlgorithmDeployer:
 
         ignored_dirs = {".git"}
         if ignore_pycache:
-            ignored_dirs |= AlgorithmDeployer._IGNORED_METADATA_DIRS - {
-                ".git"
-            }
+            ignored_dirs |= AlgorithmDeployer._IGNORED_METADATA_DIRS - {".git"}
 
         # get all the files other than .py files in the algorithm directory
         for root, dirs, _ in os.walk(directory):
             dirs[:] = [d for d in dirs if d not in ignored_dirs]
             other_than_py_files.extend(glob.glob(os.path.join(root, "*")))
 
-        # remove the .py files from the list
+        # remove Python module files from the list
         other_than_py_files = [
-            file for file in other_than_py_files if not file.endswith(".py")
+            file
+            for file in other_than_py_files
+            if not file.endswith(".py") and not file.endswith(".pyc")
         ]
         # remove paths that are directories
         other_than_py_files = [

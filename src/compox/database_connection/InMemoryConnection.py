@@ -1,4 +1,5 @@
 from compox.database_connection.BaseConnection import BaseConnection
+from compox.database_connection.exceptions import reraised_storage_error
 
 
 class InMemoryConnection(BaseConnection):
@@ -169,14 +170,20 @@ class InMemoryConnection(BaseConnection):
         object : list[bytes] | list[str]
             A list of objects. Only `bytes` values are stored.
         """
-        self.store.setdefault(collection_name, {})
-        self.tags.setdefault(collection_name, {})
-        for name, obj in zip(object_names, object):
-            self.store[collection_name][name] = obj
-            if collection_name == "data-store":
-                tags = self.tags[collection_name].get(name, {})
-                tags.setdefault("training_ref", "0")
-                self.tags[collection_name][name] = tags
+        try:
+            self.store.setdefault(collection_name, {})
+            self.tags.setdefault(collection_name, {})
+            for name, obj in zip(object_names, object):
+                self.store[collection_name][name] = obj
+                if collection_name == "data-store":
+                    tags = self.tags[collection_name].get(name, {})
+                    tags.setdefault("training_ref", "0")
+                    self.tags[collection_name][name] = tags
+        except Exception as exc:
+            raise reraised_storage_error(
+                exc,
+                operation=f"put_objects to {collection_name}",
+            ) from exc
 
     def get_object_tags(
         self, collection_name: str, object_name: str
@@ -214,11 +221,17 @@ class InMemoryConnection(BaseConnection):
         list[bool]
             A list indicating whether each object already existed before insertion.
         """
-        self.store.setdefault(collection_name, {})
-        collection = self.store[collection_name]
+        try:
+            self.store.setdefault(collection_name, {})
+            collection = self.store[collection_name]
 
-        already_exists = [name in collection for name in object_names]
-        for name, obj, exists in zip(object_names, object, already_exists):
-            if not exists:
-                collection[name] = obj
-        return already_exists
+            already_exists = [name in collection for name in object_names]
+            for name, obj, exists in zip(object_names, object, already_exists):
+                if not exists:
+                    collection[name] = obj
+            return already_exists
+        except Exception as exc:
+            raise reraised_storage_error(
+                exc,
+                operation=f"put_objects_with_duplicity_check to {collection_name}",
+            ) from exc

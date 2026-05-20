@@ -270,10 +270,17 @@ def deploy_algorithm_local_async(
             [json.dumps(record.model_dump())],
         )
     except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"detail": f"Failed to save deploy record: {e}"},
+        fallback_record = record.model_dump()
+        fallback_record["status"] = "FAILED"
+        fallback_record["time_completed"] = str(datetime.now())
+        fallback_record["log"] = f"Failed to save deploy record: {e}"
+        request.app.state.emergency_record_store.write_record(
+            "deploy-store",
+            deploy_id,
+            fallback_record,
+            storage_error=e,
         )
+        return DeployResponse(deploy_id=deploy_id)
 
     try:
         request.app.state.executor.submit(
@@ -281,6 +288,7 @@ def deploy_algorithm_local_async(
             database_connection=database_connection,
             deploy_id=deploy_id,
             path=path,
+            emergency_record_store=request.app.state.emergency_record_store,
             algorithm_name_override=algorithm_name,
             algorithm_major_version_override=algorithm_major_version,
             removable_override=removable,
@@ -308,23 +316,38 @@ async def get_deploy_record(
     Get deploy record by id.
     """
     database_connection = request.app.state.database_connection
+    emergency_record_store = request.app.state.emergency_record_store
     try:
+        fallback_record = emergency_record_store.read_record(
+            "deploy-store", deploy_id
+        )
         object_exists = database_connection.check_objects_exist(
             "deploy-store", [deploy_id]
         )[0]
         if not object_exists:
+            if fallback_record is not None:
+                return DeployRecord(**fallback_record)
             return JSONResponse(
                 status_code=404,
                 content={"detail": "Deploy record not found"},
             )
-        return DeployRecord(
+        primary_record = DeployRecord(
             **json.loads(
                 database_connection.get_objects(
                     "deploy-store", [deploy_id]
                 )[0]
             )
         )
+        if fallback_record is not None and fallback_record.get("status") == "FAILED":
+            if primary_record.status.upper() not in {"FAILED", "COMPLETED"}:
+                return DeployRecord(**fallback_record)
+        return primary_record
     except Exception as e:
+        fallback_record = emergency_record_store.read_record(
+            "deploy-store", deploy_id
+        )
+        if fallback_record is not None:
+            return DeployRecord(**fallback_record)
         return JSONResponse(
             status_code=500,
             content={"detail": f"Failed to get deploy record: {e}"},

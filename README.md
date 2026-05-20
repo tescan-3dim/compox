@@ -68,6 +68,69 @@ compox deploy-algorithms --config /path/to/config.yaml --path /path/to/algorithm
 
 Note that the server does not need to be running in order to deploy the algorithms.
 
+### Algorithm Bundles
+Compox can package builtin algorithms into an encrypted algorithm bundle and later
+import that bundle into another backend. This is useful when you want to ship a
+predefined set of builtin algorithms together with their code, assets and checkpoint
+metadata.
+
+An algorithm bundle is a snapshot of these storage collections:
+
+- `algorithm-store`
+- `module-store`
+- `asset-store`
+- `algorithm-checkpoint-store`
+
+Build a bundle from the currently configured storage backend:
+
+```bash
+compox build-algorithm-bundle --config /path/to/config.yaml
+```
+
+If you do not provide a key explicitly, Compox generates one and prints it. You can
+also generate a key separately:
+
+```bash
+compox generate-algorithm-bundle-key
+```
+
+Inspect a bundle without importing it:
+
+```bash
+compox inspect-algorithm-bundle \
+  --bundle-path /path/to/compox_algorithm_bundle.zip \
+  --key <bundle-key>
+```
+
+Import a bundle into the backend configured by your config file:
+
+```bash
+compox import-algorithm-bundle \
+  --config /path/to/config.yaml \
+  --bundle-path /path/to/compox_algorithm_bundle.zip \
+  --key <bundle-key>
+```
+
+If `storage.builtin_storage_bundle_path` and `storage.builtin_storage_bundle_key`
+are configured, Compox also imports the bundle automatically during server startup.
+The startup import is gated by the bundle file hash, so the same bundle is not
+re-imported repeatedly after a successful import.
+
+Bundle import is semantic, and follows the AlgorithmDeployer logic with some special handling for bundled algorithms:
+
+- if a builtin algorithm with the same name and major version already exists,
+  Compox reuses the existing algorithm id and applies the standard minor-version
+  insertion rule used by normal algorithm deployment
+- if the bundled latest minor version has the same `module_id` and `assets` as
+  the current latest target version, no new minor version is created
+- if the bundled latest minor version differs, a new minor version is appended
+- checkpoint manifests are imported and their `parent_algorithm_id` is rewritten
+  to the target algorithm id
+
+If an algorithm with the same name and major version already exists in the target
+backend, Compox treats it as the merge target and applies the same minor-version
+update logic. The import does not use a separate ownership flag.
+
 
 ## Configuration
 The server uses pydantic settings for configuration. The options can be either set as runtime arguments, in a yaml file, or using the `COMPOX__` environment variables, in corresponding order of precedence.
@@ -118,6 +181,8 @@ The server uses pydantic settings for configuration. The options can be either s
 | `storage`                          | `stop_requests_expire_days`  | `7`                                  | Days until stop-requests expire.                                            |
 | `storage`                          | `access_key_id`              | generated with `UUIDv4`              | Generated access key for storage backend. If `null` is provided, random UUIDv4 is generated. |
 | `storage`                          | `secret_access_key`          | generated with `UUIDv4`              | Generated secret key for storage backend. If `null` is provided, random UUIDv4 is generated. |
+| `storage`                          | `builtin_storage_bundle_path`| `None`                               | Optional path to an encrypted builtin algorithm bundle imported at startup.  |
+| `storage`                          | `builtin_storage_bundle_key` | `None`                               | Base64url-encoded AES-256 key used to read the builtin algorithm bundle.     |
 | `storage.backend_settings` (minio) | `provider`                   | `"minio"`                            | Selected backend provider.                                                  |
 | `storage.backend_settings` (minio) | `start_instance`             | `True`                               | Whether to start a local MinIO server.                                      |
 | `storage.backend_settings` (minio) | `port`                       | `5483`                               | MinIO service port.                                                         |
@@ -172,6 +237,34 @@ Recommended modes:
 
 At `INFO` console level, Compox suppresses some high-frequency console noise such as polling status requests, file transfer access logs, and routine MinIO subprocess output. These logs still remain available in the file sink. At `DEBUG` or `TRACE`, those console logs are shown again.
 
+### Emergency fallback records
+
+Compox keeps a small filesystem side store for terminal fallback records when the
+primary storage backend cannot persist the final execution, training, or deploy
+state.
+
+Behavior:
+
+- Fallback records are written only for:
+  - `execution-store`
+  - `training-store`
+  - `deploy-store`
+- The emergency store root defaults to:
+  - `<directory of log_path>/compox_emergency_records`
+  - or the system temp directory if `log_path` is not available
+- Fallback files use a Compox-specific filename pattern:
+  - `compox_emergency_<record_id>.json`
+- Existing fallback files are purged on Compox startup for the shared app/worker
+  emergency store
+- The startup purge only removes Compox-owned fallback files in the known
+  fallback collections above; it does not delete arbitrary files under the root
+- If a later write of the same terminal record succeeds in the primary storage,
+  the matching emergency fallback record is deleted
+
+The emergency store is intentionally a best-effort same-run recovery mechanism,
+not a long-term archival store.
+
+### Dynamic path prefixes
 
 Some fields in the Compox configuration (such as `log_path`, `icon_path`, etc.) support **dynamic prefixes** that resolve to OS-specific or runtime-specific paths. This allows for portability across platforms (e.g., Windows, Linux) and between development and production environments.
 

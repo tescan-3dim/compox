@@ -1,7 +1,6 @@
 ## Implementing the `train()` method in Compox algorithm runners
 
 This guide is for algorithm developers implementing training logic in their Runner classes.
----
 
 ### Where `train()` is called
 

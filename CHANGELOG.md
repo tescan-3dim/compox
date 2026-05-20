@@ -1,3 +1,30 @@
+# v3.1.0 (19-05-2026)
+## Added
+- Compox algorithm bundle support, including bundle building, bundle-backed storage access, builtin bundle import, and persistent zip-based runtime importing.
+- `AlgorithmRecordRegistrar` for shared semantic algorithm record lookup, versioning, and storage.
+- Emergency fallback record storage plus storage exception classification for execution, training, and deployment failures.
+- CLI support for bundle-related deployment and packaging workflows.
+- Expanded test coverage for bundles, emergency record fallback, storage exceptions, and CLI flows.
+
+## Changed
+- Algorithm deployment was refactored around the new registrar and runtime zip importer flow.
+- Builtin algorithm import is now wired into API startup through the bundle importer path.
+- Server configuration was expanded for bundle paths, bundle keys, and runtime module cache behavior.
+- Algorithm API responses now include the backward-compatible `algorithm_minor_version` field alongside `latest_algorithm_minor_version`.
+- ParticleSeg3D tutorial packaging/docs were updated, including a `numpy<2` constraint for that tutorial flow.
+
+## Fixed
+- OpenAPI documentation for binary file download responses now declares the correct response type.
+- Template algorithm README snippets were updated to match current runner usage.
+
+## Compatibility Notes
+- Builtin bundle import remains opt-in through bundle path and key configuration.
+- `AlgorithmRegisteredResponse` continues to expose the legacy `algorithm_minor_version` field for backward compatibility while `latest_algorithm_minor_version` remains the canonical field.
+
+# v3.0.2 (27-04-2026)
+## Fixed
+- Fixed the ddocumentation formatting error.
+
 # v3.0.1 (27-04-2026)
 ## Fixed
 - Fixed the documentation formatting and structure.

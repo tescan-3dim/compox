@@ -28,7 +28,7 @@ def test_stop_execution(server_url):
         assert response.status_code == 200
         file_ids.append(response.json()["file_id"])
 
-    response = get_algorithm_id(algorithm_url, "foo", "1")
+    response = get_algorithm_id(algorithm_url, "stoppable_foo", "1")
     print(response.json())
     assert response.status_code == 200
     algorithm_id = response.json()["algorithm_id"]
@@ -93,7 +93,7 @@ def test_stop_already_finished_execution(server_url):
         assert response.status_code == 200
         file_ids.append(response.json()["file_id"])
 
-    response = get_algorithm_id(algorithm_url, "foo", "1")
+    response = get_algorithm_id(algorithm_url, "stoppable_foo", "1")
     print(response.json())
     assert response.status_code == 200
     algorithm_id = response.json()["algorithm_id"]

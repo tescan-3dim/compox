@@ -62,9 +62,7 @@ class DummySession:
         del self.store[key]
 
 
-def _create_runner_zip_with_version(
-    version: str, module_name: str = "runner_module"
-) -> bytes:
+def _create_runner_zip_with_version(version: str) -> bytes:
     """
     Build a minimal runner module zip with an identifiable class VERSION.
     """
@@ -83,7 +81,7 @@ class Runner:
         pass
 """
     with zipfile.ZipFile(buffer, "w") as z:
-        z.writestr(f"{module_name}.py", runner_code.strip() + "\n")
+        z.writestr("Runner.py", runner_code.strip() + "\n")
     buffer.seek(0)
     return buffer.read()
 
@@ -326,9 +324,9 @@ def test_cached_fetch_algorithm_uses_cache(task_handler, mock_connection):
     # fetch_algorithm now always refreshes algorithm metadata and also reloads the
     # task record to persist the resolved runtime device, so only module loading
     # should stay cached between calls.
-    assert mock_import.call_count == 1, (
-        f"Expected ZipImporter to be invoked once due to cache hit, got {mock_import.call_count}"
-    )
+    assert (
+        mock_import.call_count == 1
+    ), f"Expected ZipImporter to be invoked once due to cache hit, got {mock_import.call_count}"
     assert (
         calls_second - calls_first == 2
     ), (
@@ -354,8 +352,8 @@ def test_fetch_algorithm_resolves_new_latest_minor_when_minor_is_none(
     algorithm_id = "alg-latest-cache-test"
     algorithm_key = f"{algorithm_id}~cache_test_algo~1"
     latest_minor_state = {"value": "0"}
-    module_v0 = _create_runner_zip_with_version("v0", "module_v0")
-    module_v1 = _create_runner_zip_with_version("v1", "module_v1")
+    module_v0 = _create_runner_zip_with_version("v0")
+    module_v1 = _create_runner_zip_with_version("v1")
 
     def list_objects(bucket):
         if bucket == "algorithm-store":
@@ -406,6 +404,7 @@ def test_fetch_asset(task_handler, mock_connection):
     """
     Verify fetch_asset retrieves the correct bytes and calls the proper bucket.
     """
+
     class DummyRunner:
         def __new__(cls):
             instance = super().__new__(cls)

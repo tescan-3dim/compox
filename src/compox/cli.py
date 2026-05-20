@@ -9,10 +9,25 @@ import sys
 import subprocess
 import os
 import time
+import json
 from typing import Optional
 import requests
 from compox.config.server_settings import Settings
 from compox.algorithm_debug import app as debug_app
+from compox.config.server_settings import get_server_settings
+from compox.components.db_connection_builder import build_database_connection
+from compox.components.builtin_algorithm_importer import (
+    BuiltinAlgorithmImporter,
+)
+from compox.components.compox_algorithm_bundle_builder import (
+    CompoxAlgorithmBundleBuilder,
+)
+from compox.components.minio_wrapper import MinIOWrapper
+from compox.database_connection.CompoxAlgorithmBundleConnection import (
+    CompoxAlgorithmBundleConnection,
+)
+from compox.internal import downloader
+from compox.server_utils import get_subprocess_fn
 
 app = typer.Typer(
     help="This CLI tool contains commands for running the Compox.",
@@ -520,6 +535,126 @@ def serve_docs(port: int = 8234, directory: str = "docs/_build/html") -> None:
     ]
     typer.echo(f"Serving documentation on http://localhost:{port}/")
     subprocess.run(command)
+
+
+@app.command(name="generate-algorithm-bundle-key")
+def generate_algorithm_bundle_key() -> None:
+    """
+    Generate a random key for algorithm bundle encryption/decryption.
+    """
+    typer.echo(CompoxAlgorithmBundleBuilder.generate_key())
+
+
+@app.command(name="build-algorithm-bundle")
+def build_algorithm_bundle(
+    config: str = typer.Option(..., "--config", help="Path to server config."),
+    output: str = typer.Option(
+        "compox_algorithm_bundle.zip",
+        "--output",
+        help="Output algorithm bundle zip path.",
+    ),
+    key: str = typer.Option(
+        None,
+        "--key",
+        help="Base64url-encoded AES-256 key. If omitted, a new key is generated and printed.",
+    ),
+) -> None:
+    """
+    Build an encrypted Compox algorithm bundle from the configured storage backend.
+    """
+    settings = get_server_settings(config_path=config, verbose=False)
+
+    minio_process = None
+    if (
+        settings.storage.backend_settings.provider == "minio"
+        and settings.storage.backend_settings.start_instance
+    ):
+        os.makedirs(settings.storage.backend_settings.storage_path, exist_ok=True)
+        downloader.get_minio(settings)
+        minio_wrapper = MinIOWrapper(settings)
+        minio_process = minio_wrapper.start(get_subprocess_fn())
+        # Give MinIO a moment to accept S3 requests.
+        time.sleep(1.0)
+
+    db = build_database_connection(settings)
+
+    if key is None:
+        key = CompoxAlgorithmBundleBuilder.generate_key()
+        typer.echo(f"Generated algorithm bundle key: {key}")
+
+    try:
+        builder = CompoxAlgorithmBundleBuilder(db, key)
+        object_count = builder.build(output_zip_path=output)
+        typer.echo(
+            f"Algorithm bundle created: {os.path.abspath(output)}"
+        )
+        typer.echo(f"Objects bundled: {object_count}")
+    finally:
+        if minio_process is not None:
+            minio_process.kill()
+
+
+@app.command(name="inspect-algorithm-bundle")
+def inspect_algorithm_bundle(
+    bundle_path: str = typer.Option(..., "--bundle-path", help="Path to algorithm bundle zip."),
+    key: str = typer.Option(
+        ...,
+        "--key",
+        help="Base64url-encoded AES-256 key used to read the bundle.",
+    ),
+) -> None:
+    """
+    Inspect bundle metadata and object counts.
+    """
+    bundle = CompoxAlgorithmBundleConnection(bundle_path, key)
+    info = bundle.get_bundle_info()
+    info["bundle_path"] = os.path.abspath(bundle_path)
+    typer.echo(json.dumps(info, indent=4, sort_keys=True))
+
+
+@app.command(name="import-algorithm-bundle")
+def import_algorithm_bundle(
+    config: str = typer.Option(..., "--config", help="Path to server config."),
+    bundle_path: str = typer.Option(
+        None,
+        "--bundle-path",
+        help="Override bundle path from config for this import.",
+    ),
+    key: str = typer.Option(
+        None,
+        "--key",
+        help="Override bundle key from config for this import.",
+    ),
+) -> None:
+    """
+    Import an encrypted Compox algorithm bundle into the configured storage backend.
+    """
+    settings = get_server_settings(config_path=config, verbose=False)
+    if bundle_path is not None:
+        settings.storage.builtin_storage_bundle_path = bundle_path
+    if key is not None:
+        settings.storage.builtin_storage_bundle_key = key
+
+    minio_process = None
+    if (
+        settings.storage.backend_settings.provider == "minio"
+        and settings.storage.backend_settings.start_instance
+    ):
+        os.makedirs(settings.storage.backend_settings.storage_path, exist_ok=True)
+        downloader.get_minio(settings)
+        minio_wrapper = MinIOWrapper(settings)
+        minio_process = minio_wrapper.start(get_subprocess_fn())
+        time.sleep(1.0)
+
+    db = build_database_connection(settings)
+
+    try:
+        builtin_algorithm_importer = BuiltinAlgorithmImporter(db, settings)
+        builtin_algorithm_importer.run_startup_migration()
+        typer.echo("Algorithm bundle import completed.")
+    finally:
+        if minio_process is not None:
+            minio_process.kill()
 
 
 def parse_flat_args(args: list[str]) -> dict:

@@ -82,9 +82,12 @@ def test_export_endpoint_returns_zip(server_url):
     with zipfile.ZipFile(zip_bytes) as zf:
         names = zf.namelist()
         assert names, "Expected exported ZIP to contain files."
-        # Runner.py should be present somewhere in the package
-        assert any(name.endswith("Runner.py") for name in names), (
-            f"Expected Runner.py in exported ZIP, got {names!r}"
+        # Runner entrypoint should be present in source or bytecode form.
+        assert any(
+            name.endswith("Runner.py") or name.endswith("Runner.pyc")
+            for name in names
+        ), (
+            f"Expected Runner.py/Runner.pyc in exported ZIP, got {names!r}"
         )
 
 

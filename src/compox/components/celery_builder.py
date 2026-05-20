@@ -8,6 +8,7 @@ from kombu import Queue
 
 from compox.config.server_settings import Settings
 from compox.components.db_connection_builder import build_database_connection
+from compox.internal.EmergencyRecordStore import EmergencyRecordStore
 
 
 def route_task(name, args, kwargs, options, task=None, **kw):
@@ -51,5 +52,9 @@ def build_celery(settings: Settings) -> Celery:
     
     database_connection = build_database_connection(settings)
     celery.database_connection = database_connection
+    celery.emergency_record_store = EmergencyRecordStore(
+        EmergencyRecordStore.default_root_dir(settings.log_path)
+    )
+    celery.emergency_record_store.purge_all_records()
     
     return celery

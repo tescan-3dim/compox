@@ -14,16 +14,17 @@ from concurrent.futures import ThreadPoolExecutor
 from compox.server_utils import (
     find_algorithm_by_id,
     generate_uuid,
-    ZipImporter,
     algorithm_cache,
     check_system_gpu_availability,
     check_mps_availability,
 )
+from compox.algorithm_utils.zip_importer import ZipImporter
 from compox.algorithm_utils.io_schemas import DataSchema
 from compox.session.TaskSession import TaskSession
 from compox.database_connection.S3Connection import S3Connection
 from compox.training.AlgorithmCheckpoint import AlgorithmCheckpoint
 from compox.tasks.StopRequest import StopRequest
+from compox.internal.EmergencyRecordStore import EmergencyRecordStore
 
 
 class TaskStoppedException(Exception): ...
@@ -58,12 +59,16 @@ class TaskHandler:
         database_connection: S3Connection,
         database_update: bool = True,
         task_session: TaskSession | None = None,
+        emergency_record_store: EmergencyRecordStore | None = None,
     ):
         self.stop_request = StopRequest(task_id, database_connection)
         self._task_id = task_id
         self._progress = 0.0
         self.database_update = database_update
         self.database_connection = database_connection
+        self.emergency_record_store = (
+            emergency_record_store or EmergencyRecordStore()
+        )
         self.algorithm_assets = None
         self.stream = io.StringIO()
         self.logger = logger.bind(log_type="TASK", task_id=task_id)
@@ -115,7 +120,6 @@ class TaskHandler:
         except TaskStoppedException:
             raise
         except Exception as e:
-            self.mark_as_failed(e)
             raise e
 
     def _check_for_stop_request(self) -> None:
@@ -172,7 +176,6 @@ class TaskHandler:
                 [json.dumps(task_record).encode()],
             )
         except Exception as e:
-            self.mark_as_failed(e)
             raise e
 
     @property
@@ -474,14 +477,33 @@ class TaskHandler:
         try:
             if e is not None:
                 self.logger.opt(exception=e).error("Task failed")
-            self.time_completed = str(datetime.now())
-            self.status = "FAILED"
-            self.progress = 1.0
-            self.output_dataset_ids = []
-
-            # Log useful file stats and flush logs
             self._log_file_stats()
-            self.update_log()
+            self.log = str(self.stream.getvalue())
+
+            failed_record = self._build_failed_record(
+                time_completed=str(datetime.now())
+            )
+            try:
+                self.database_connection.put_objects(
+                    self._RECORD_STORAGE_NAME,
+                    [self._task_id],
+                    [json.dumps(failed_record).encode()],
+                )
+                self.emergency_record_store.delete_record(
+                    self._RECORD_STORAGE_NAME, self._task_id
+                )
+            except Exception as storage_error:
+                self.emergency_record_store.write_record(
+                    self._RECORD_STORAGE_NAME,
+                    self._task_id,
+                    failed_record,
+                    storage_error=storage_error,
+                )
+
+            self._time_completed = failed_record["time_completed"]
+            self._status = failed_record["status"]
+            self._progress = failed_record["progress"]
+            self._output_dataset_ids = failed_record["output_dataset_ids"]
 
         except TaskStoppedException:
             raise
@@ -545,6 +567,34 @@ class TaskHandler:
             except Exception as e:
                 self.mark_as_failed(e)
                 raise e
+
+    def _build_failed_record(self, time_completed: str) -> dict:
+        """
+        Build a terminal failed task record from the current stored record.
+        """
+        try:
+            task_record = json.loads(
+                self.database_connection.get_objects(
+                    self._RECORD_STORAGE_NAME,
+                    [self._task_id],
+                )[0]
+            )
+        except Exception:
+            task_record = {self._record_id_field_name(): self._task_id}
+
+        task_record["status"] = "FAILED"
+        task_record["progress"] = 1.0
+        task_record["time_completed"] = time_completed
+        task_record["output_dataset_ids"] = []
+        task_record["log"] = self.log
+        return task_record
+
+    def _record_id_field_name(self) -> str:
+        if self._RECORD_STORAGE_NAME == "execution-store":
+            return "execution_id"
+        if self._RECORD_STORAGE_NAME == "training-store":
+            return "training_id"
+        return "record_id"
 
     def fetch_algorithm(
         self,
@@ -632,6 +682,11 @@ class TaskHandler:
                 "Algorithm runner successfully loaded in {} seconds.".format(
                     round(time.time() - start, 8)
                 )
+            )
+            algorithm_minor_version = (
+                algorithm_json["latest_algorithm_minor_version"]
+                if algorithm_minor_version is None
+                else algorithm_minor_version
             )
             self.logger = logger.bind(
                 algorithm=f"{algorithm_json['algorithm_name']} {algorithm_json['algorithm_major_version']}.{algorithm_minor_version}",
@@ -761,9 +816,7 @@ class TaskHandler:
             runner, for example ``cpu``, ``cuda`` or ``mps``.
         """
         task_record = self._get_task_record()
-        task_record["resolved_execution_device"] = (
-            resolved_execution_device
-        )
+        task_record["resolved_execution_device"] = resolved_execution_device
         self._save_task_record(task_record)
 
     def __get_device(

@@ -42,6 +42,7 @@ def training_task_celery(
             database_connection=self.app.database_connection,
             database_update=True,
             temp_store=temp_store,
+            emergency_record_store=self.app.emergency_record_store,
         )
         training_handler.set_as_current_handler()
         training_handler.logger.info("Fetching algorithm...")

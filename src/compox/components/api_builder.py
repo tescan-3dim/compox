@@ -4,6 +4,7 @@ All rights reserved
 """
 
 import os
+import tempfile
 import atexit
 from contextlib import asynccontextmanager
 from concurrent.futures import _base, ThreadPoolExecutor
@@ -17,7 +18,10 @@ from compox.config.server_settings import Settings
 from compox.components.minio_wrapper import MinIOWrapper
 from compox.components.celery_builder import build_celery
 from compox.components.db_connection_builder import build_database_connection
-
+from compox.internal.EmergencyRecordStore import EmergencyRecordStore
+from compox.components.builtin_algorithm_importer import (
+    BuiltinAlgorithmImporter,
+)
 from compox.algorithm_utils.AlgorithmExporter import AlgorithmExporter
 from compox.database_connection.BaseConnection import BaseConnection
 
@@ -25,6 +29,7 @@ from compox.server_utils import (
     check_and_create_database_collections,
     get_subprocess_fn,
 )
+from compox.algorithm_utils.zip_importer import ZipImporter
 
 from compox.routers import (
     algorithms_controller,
@@ -85,6 +90,10 @@ class ApiBuilder:
         app.state.executor = self.executor
         app.state.settings = self.settings
         app.state.algorithm_exporter = self.algorithm_exporter
+        app.state.emergency_record_store = EmergencyRecordStore(
+            EmergencyRecordStore.default_root_dir(self.settings.log_path)
+        )
+        app.state.emergency_record_store.purge_all_records()
         for route in self.routes:
             app.include_router(route)
 
@@ -144,11 +153,17 @@ async def lifespan(app: FastAPI):
                 "algorithm-checkpoint-store",
                 "stop-requests",
                 "deploy-store",
+                "system-store",
             ],
             database_connection=app.state.database_connection,
         )
     if len(new_collections) > 0:
         fastapi_logger.info(f"Created new collections: {new_collections}")
+
+    builtin_algorithm_importer = BuiltinAlgorithmImporter(
+        app.state.database_connection, settings
+    )
+    builtin_algorithm_importer.run_startup_migration()
 
     for lifecycle_subprocess in lifecycle_subprocesses.values():
         atexit.register(lifecycle_subprocess.kill)
@@ -184,6 +199,18 @@ def build_api(settings: Settings, with_lifespan: bool = True) -> FastAPI:
     ValueError
         If server backend is invalid.
     """
+
+    # Configure persistent module import cache. Prefer storage-adjacent runtime path
+    # when backend provides local storage_path, otherwise use system temp fallback.
+    storage_backend = settings.storage.backend_settings
+    storage_path = getattr(storage_backend, "storage_path", None)
+    module_cache_dir = (
+        os.path.join(storage_path, "runtime", "module_cache")
+        if storage_path
+        else os.path.join(tempfile.gettempdir(), "compox", "module_cache")
+    )
+    ZipImporter.configure_cache_dir(module_cache_dir)
+    atexit.register(ZipImporter.cleanup_cache)
 
     # Build database connection
     database_connection = build_database_connection(settings)

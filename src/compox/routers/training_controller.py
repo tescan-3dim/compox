@@ -135,10 +135,18 @@ def train_algorithm(
             [json.dumps(training_record.model_dump())],
         )
     except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"detail": f"Failed to save training record: {e}"},
+        fallback_record = training_record.model_dump()
+        fallback_record["status"] = "FAILED"
+        fallback_record["progress"] = 1.0
+        fallback_record["time_completed"] = str(datetime.now())
+        fallback_record["log"] = f"Failed to save training record: {e}"
+        request.app.state.emergency_record_store.write_record(
+            training_collection_name,
+            training_id,
+            fallback_record,
+            storage_error=e,
         )
+        return TrainingResponse(training_id=training_id)
 
     if settings.inference.backend_settings.executor == "celery":
         request.app.state.executor.send_task(
@@ -162,6 +170,7 @@ def train_algorithm(
             training_task_fastapi,
             database_connection=database_connection,
             training_record=training_record,
+            emergency_record_store=request.app.state.emergency_record_store,
         )
 
     return TrainingResponse(training_id=training_id)
@@ -192,24 +201,39 @@ async def get_training_record(training_id: str, request: Request):
     """
     training_collection_name = "training-store"
     database_connection = request.app.state.database_connection
+    emergency_record_store = request.app.state.emergency_record_store
     try:
+        fallback_record = emergency_record_store.read_record(
+            training_collection_name, training_id
+        )
         object_exists = database_connection.check_objects_exist(
             training_collection_name, [training_id]
         )[0]
         if not object_exists:
+            if fallback_record is not None:
+                return TrainingRecord(**fallback_record)
             return JSONResponse(
                 status_code=404,
                 content={"detail": "Training record not found"},
             )
-        return TrainingRecord(
+        primary_record = TrainingRecord(
             **json.loads(
                 database_connection.get_objects(
                     training_collection_name, [training_id]
                 )[0]
             )
         )
+        if fallback_record is not None and fallback_record.get("status") == "FAILED":
+            if primary_record.status.upper() not in TERMINAL_STATES:
+                return TrainingRecord(**fallback_record)
+        return primary_record
 
     except Exception as e:
+        fallback_record = emergency_record_store.read_record(
+            training_collection_name, training_id
+        )
+        if fallback_record is not None:
+            return TrainingRecord(**fallback_record)
         return JSONResponse(
             status_code=500,
             content={"detail": f"Failed to get training record: {e}"},

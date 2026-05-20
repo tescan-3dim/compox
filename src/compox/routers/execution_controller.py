@@ -115,10 +115,18 @@ def execute_algorithm(
             [json.dumps(execution_record.model_dump())],
         )
     except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"detail": f"Failed to save execution record: {e}"},
+        fallback_record = execution_record.model_dump()
+        fallback_record["status"] = "FAILED"
+        fallback_record["progress"] = 1.0
+        fallback_record["time_completed"] = str(datetime.now())
+        fallback_record["log"] = f"Failed to save execution record: {e}"
+        request.app.state.emergency_record_store.write_record(
+            "execution-store",
+            execution_id,
+            fallback_record,
+            storage_error=e,
         )
+        return ExecutionResponse(execution_id=execution_id)
 
     if settings.inference.backend_settings.executor == "celery":
         request.app.state.executor.send_task(
@@ -141,6 +149,7 @@ def execute_algorithm(
             execution_task_fastapi,
             database_connection=database_connection,
             execution_record=execution_record,
+            emergency_record_store=request.app.state.emergency_record_store,
         )
     else:
         raise Exception(
@@ -244,22 +253,37 @@ async def get_execution_record(id: str, request: Request) -> ExecutionRecord:
         The execution record.
     """
     database_connection = request.app.state.database_connection
+    emergency_record_store = request.app.state.emergency_record_store
     try:
+        fallback_record = emergency_record_store.read_record(
+            "execution-store", id
+        )
         object_exists = database_connection.check_objects_exist(
             "execution-store", [id]
         )[0]
         if not object_exists:
+            if fallback_record is not None:
+                return ExecutionRecord(**fallback_record)
             return JSONResponse(
                 status_code=404,
                 content={"detail": "Execution record not found"},
             )
-        return ExecutionRecord(
+        primary_record = ExecutionRecord(
             **json.loads(
                 database_connection.get_objects("execution-store", [id])[0]
             )
         )
+        if fallback_record is not None and fallback_record.get("status") == "FAILED":
+            if primary_record.status.upper() not in TERMINAL_STATES:
+                return ExecutionRecord(**fallback_record)
+        return primary_record
 
     except Exception as e:
+        fallback_record = emergency_record_store.read_record(
+            "execution-store", id
+        )
+        if fallback_record is not None:
+            return ExecutionRecord(**fallback_record)
         return JSONResponse(
             status_code=500,
             content={"detail": f"Failed to get execution record: {e}"},

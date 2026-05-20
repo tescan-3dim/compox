@@ -25,6 +25,12 @@ def test_all_fields(server_url):
         assert "algorithm_id" in algorithm
         assert "algorithm_name" in algorithm
         assert "algorithm_version" in algorithm
+        assert "latest_algorithm_minor_version" in algorithm
+        assert "algorithm_minor_version" in algorithm
+        assert (
+            algorithm["algorithm_minor_version"]
+            == algorithm["latest_algorithm_minor_version"]
+        )
 
 
 # Test 3: Test multiple requests

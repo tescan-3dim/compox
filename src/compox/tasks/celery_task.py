@@ -54,6 +54,7 @@ def execution_task_celery(
             self.app.database_connection,
             database_update=True,
             task_session=task_session,
+            emergency_record_store=self.app.emergency_record_store,
         )
         task_handler.set_as_current_handler()
         start = datetime.now()

@@ -15,6 +15,12 @@ def test_basic_positive_get_algorithm(server_url):
     assert "algorithm_id" in response.json()
     assert "algorithm_name" in response.json()
     assert "algorithm_version" in response.json()
+    assert "latest_algorithm_minor_version" in response.json()
+    assert "algorithm_minor_version" in response.json()
+    assert (
+        response.json()["algorithm_minor_version"]
+        == response.json()["latest_algorithm_minor_version"]
+    )
 
 
 # Test 2: Algorithm Name Case Sensitivity

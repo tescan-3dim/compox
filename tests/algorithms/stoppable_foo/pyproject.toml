@@ -1,0 +1,13 @@
+[project]
+name = "stoppable_foo"
+version = "1.0.0"
+
+[tool.compox]
+algorithm_type = "Generic"
+tags = ["test"]
+description = "Outputs a stoppable foo."
+supported_devices = ["cpu", "gpu"]
+default_device = "gpu"
+additional_parameters = []
+check_importable = false
+obfuscate = true

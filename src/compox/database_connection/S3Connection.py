@@ -14,6 +14,7 @@ from compox.database_connection.database_utils import (
     calculate_etag_multipart,
 )
 from compox.database_connection.BaseConnection import BaseConnection
+from compox.database_connection.exceptions import reraised_storage_error
 
 
 class S3Connection(BaseConnection):
@@ -76,6 +77,9 @@ class S3Connection(BaseConnection):
         )
         config = Config(retries={"total_max_attempts": 20, "mode": "standard"})
 
+        self.endpoint_url = endpoint_url
+        self.aws_access_key_id = aws_access_key_id
+        self.aws_secret_access_key = aws_secret_access_key
         self.s3_client = boto3.client(
             "s3",
             endpoint_url=endpoint_url,
@@ -102,6 +106,23 @@ class S3Connection(BaseConnection):
         self.stop_requests_expire_days = stop_requests_expire_days
         self.collection_prefix = (
             f"{collection_prefix}" if collection_prefix else ""
+        )
+
+    def __reduce__(self):
+        return (
+            self.__class__,
+            (
+                self.endpoint_url,
+                self.aws_access_key_id,
+                self.aws_secret_access_key,
+                self.region_name,
+                self.data_store_expire_days,
+                self.execution_store_expire_days,
+                self.training_store_expire_days,
+                self.deploy_store_expire_days,
+                self.stop_requests_expire_days,
+                self.collection_prefix,
+            ),
         )
 
     def list_collections(self) -> list:
@@ -380,49 +401,64 @@ class S3Connection(BaseConnection):
         object : list[bytes] | list[str]
             The byte objects.
         """
-        for i in range(len(object_names)):
-            if (
-                not hasattr(object[i], "__len__")
-                or len(object[i]) < self.uploader.chunk_size
-            ):
-                # if the object is smaller than the chunk size, upload it in one go
-                try:
-                    self.s3_client.put_object(
-                        Body=object[i],
-                        Bucket=f"{self.collection_prefix}{collection_name}",
-                        Key=object_names[i],
+        try:
+            for i in range(len(object_names)):
+                if (
+                    not hasattr(object[i], "__len__")
+                    or len(object[i]) < self.uploader.chunk_size
+                ):
+                    # if the object is smaller than the chunk size, upload it in one go
+                    last_error = None
+                    try:
+                        self.s3_client.put_object(
+                            Body=object[i],
+                            Bucket=f"{self.collection_prefix}{collection_name}",
+                            Key=object_names[i],
+                        )
+                    except ClientError as e:
+                        last_error = e
+                        # this handles the occasional
+                        # botocore.exceptions.ClientError: An error occurred (AccessDenied)
+                        # when calling the PutObject operation: Access Denied.
+                        # and retry the upload
+                        for j in range(self.post_data_retries):
+                            time.sleep(0.05)
+                            try:
+                                self.s3_client.put_object(
+                                    Body=object[i],
+                                    Bucket=f"{self.collection_prefix}{collection_name}",
+                                    Key=object_names[i],
+                                )
+                                break
+                            except ClientError as e:
+                                last_error = e
+                                self.logger.error(
+                                    f"Error uploading object {object_names[i]}: {e}"
+                                )
+                                continue
+                        else:
+                            raise last_error
+                else:
+                    # if the object is larger than the chunk size, upload it in parts
+                    self.uploader.upload_file_multipart(
+                        object[i],
+                        object_names[i],
+                        f"{self.collection_prefix}{collection_name}",
                     )
-                except ClientError as _:
-                    # this should hopefully handle the occasional
-                    # botocore.exceptions.ClientError: An error occurred (AccessDenied)
-                    # when calling the PutObject operation: Access Denied.
-                    # and retry the upload
-                    for j in range(self.post_data_retries):
-                        time.sleep(0.05)
-                        try:
-                            self.s3_client.put_object(
-                                Body=object[i],
-                                Bucket=f"{self.collection_prefix}{collection_name}",
-                                Key=object_names[i],
-                            )
-                            break
-                        except ClientError as e:
-                            self.logger.error(
-                                f"Error uploading object {object_names[i]}: {e}"
-                            )
-                            continue
-            else:
-                # if the object is larger than the chunk size, upload it in parts
-                self.uploader.upload_file_multipart(
-                    object[i],
-                    object_names[i],
-                    f"{self.collection_prefix}{collection_name}",
-                )
-            if collection_name == "data-store":
-                tags = self.get_object_tags(collection_name, object_names[i])
-                if tags.get("training_ref") is None:
-                    tags["training_ref"] = "0"
-                    self.put_object_tags(collection_name, object_names[i], tags)
+                if collection_name == "data-store":
+                    tags = self.get_object_tags(
+                        collection_name, object_names[i]
+                    )
+                    if tags.get("training_ref") is None:
+                        tags["training_ref"] = "0"
+                        self.put_object_tags(
+                            collection_name, object_names[i], tags
+                        )
+        except Exception as exc:
+            raise reraised_storage_error(
+                exc,
+                operation=f"put_objects to {collection_name}",
+            ) from exc
 
     def put_objects_with_duplicity_check(
         self, collection_name: str, object_names: list[str], object: list[bytes]

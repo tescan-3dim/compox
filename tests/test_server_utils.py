@@ -19,11 +19,11 @@ from compox.server_utils import (
     data_cache,
     check_and_create_database_collections,
     get_subprocess_fn,
-    ZipImporter,
     check_system_gpu_availability,
     check_mps_availability,
 )
 import compox.server_utils
+from compox.algorithm_utils.zip_importer import ZipImporter
 
 if os.name == "nt":
     from compox.internal.JobPOpen import JobPOpen
@@ -404,7 +404,7 @@ def test_zip_importer(tmp_path):
     modname = "mymod"
     zf = tmp_path / "m.zip"
     with zipfile.ZipFile(zf, "w") as z:
-        z.writestr(f"{modname}.py", code)
+        z.writestr("Runner.py", code)
     data = zf.read_bytes()
 
     with ZipImporter(data, modname) as m:

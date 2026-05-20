@@ -11,6 +11,8 @@ from loguru import logger
 from concurrent.futures import ThreadPoolExecutor
 from botocore.exceptions import ClientError
 
+from compox.database_connection.exceptions import reraised_storage_error
+
 
 class S3FileUploader:
     """
@@ -84,8 +86,9 @@ class S3FileUploader:
                 )
                 time.sleep(sleep_s)
 
-        raise Exception(
-            f"Multipart upload failed after multiple retries: {last_err}"
+        raise reraised_storage_error(
+            last_err or Exception("Multipart upload failed after multiple retries"),
+            operation=f"multipart upload of {key}",
         )
 
     def _upload_file_multipart_step(

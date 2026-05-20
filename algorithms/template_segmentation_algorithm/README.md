@@ -124,13 +124,9 @@ class Runner(Image2SegmentationRunner):
     """
     The runner class for the image segmentation algorithm.
     """
-
-    def __init__(self, task_handler, device: str = "cpu") -> None:
-        """
-        The aligner runner.
-        """
-        super().__init__(task_handler, device=device)
 ```
+
+For this template you do not need to implement a custom `__init__`. Compox initializes the runner through the inherited base-runner lifecycle and exposes the current task handler through `self.task_handler` and the resolved runtime device through `self.device`. Only add your own `__init__(self)` if you need to set up runner-local state.
 
 We can implement a `load_assets` method to load any assets that the algorithm requires upon initilaization of the Runner. The important bit is that the attributes that are loaded in the `load_assets` method are cached with the algorithm and do not have to be reloaded for each algorithm call. This can greatly speed up the algorithm execution. Since we do not need any assets for the segmentation algorithm, we can leave the `load_assets` method empty.
 
